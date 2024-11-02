@@ -6,10 +6,6 @@ import { TodoItem } from './todo-item'
 import { CreateTodo } from './create-todo'
 import { Skeleton } from '@/components/ui/skeleton'
 
-interface TodoListProps {
-  isAuthChecking?: boolean
-}
-
 function TodoSkeleton() {
   return (
     <div className="space-y-4">
@@ -33,18 +29,14 @@ function TodoSkeleton() {
   )
 }
 
-export function TodoList({ isAuthChecking = false }: TodoListProps) {
+export function TodoList() {
   const { todos, isLoading, error, fetchTodos } = useTodoStore()
 
   useEffect(() => {
-    // Only fetch todos after auth check is complete
-    if (!isAuthChecking) {
-      fetchTodos()
-    }
-  }, [fetchTodos, isAuthChecking])
+    fetchTodos()
+  }, [fetchTodos])
 
-  // Show skeleton during auth check or todo loading
-  if (isAuthChecking || isLoading) return <TodoSkeleton />
+  if (isLoading) return <TodoSkeleton />
   if (error) return <div>Error: {error}</div>
 
   return (

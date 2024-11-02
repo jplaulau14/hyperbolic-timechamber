@@ -15,11 +15,12 @@ interface TodoStore {
 
 export const useTodoStore = create<TodoStore>((set, get) => ({
   todos: [],
-  isLoading: false,
+  isLoading: true,
   error: null,
   fetchTodos: async () => {
     set({ isLoading: true })
     try {
+      await new Promise(resolve => setTimeout(resolve, 2000))
       const todos = await api.getTodos()
       set({ todos, error: null })
     } catch (error) {
