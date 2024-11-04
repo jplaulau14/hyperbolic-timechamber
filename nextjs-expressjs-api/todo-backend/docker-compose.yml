@@ -2,9 +2,7 @@ version: '3.8'
 
 services:
   db:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: postgres:15
     container_name: todo_db
     ports:
       - "5432:5432"
@@ -12,14 +10,35 @@ services:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
       - POSTGRES_DB=todo_db
+      - PGDATA=/var/lib/postgresql/data/pgdata
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - todo-db-data:/var/lib/postgresql/data/pgdata
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d todo_db"]
       interval: 5s
       timeout: 5s
       retries: 5
     command: ["postgres", "-c", "password_encryption=scram-sha-256"]
+    shm_size: '256mb'
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    container_name: todo_api
+    ports:
+      - "8080:8080"
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/todo_db
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - .:/app
+      - /app/node_modules
 
 volumes:
-  postgres_data: 
+  todo-db-data:
+    name: todo-db-data
