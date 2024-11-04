@@ -17,11 +17,12 @@ export function SignupForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setError('')
     try {
       await api.signup({ email, password, username })
       router.push('/login')
-    } catch (error) {
-      setError('Signup failed')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Signup failed')
     }
   }
 

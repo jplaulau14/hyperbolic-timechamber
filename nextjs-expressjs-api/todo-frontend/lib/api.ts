@@ -1,9 +1,9 @@
-import { LoginCredentials, SignupCredentials, Todo } from './types'
+import { LoginCredentials, SignupCredentials, Todo, User } from './types'
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 
 export const api = {
-  login: async (credentials: LoginCredentials, onLoginSuccess: (user: any) => void) => {
+  login: async (credentials: LoginCredentials, onLoginSuccess: (user: User) => void) => {
     console.log('Attempting login:', { email: credentials.email });
     
     const res = await fetch(`${BASE_URL}/users/login`, {
