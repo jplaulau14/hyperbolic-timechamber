@@ -1,38 +1,57 @@
 # Python Data Structures
 
-## Static Array
+Requires Python 3. No external dependencies.
 
-`StaticArray` — fixed-size array. No external dependencies.
-
-### Run tests
+## Run Tests
 
 ```bash
-cd data-structures/python
-python tests/test_static_array.py
+python3 -m unittest discover tests -v
 ```
 
-### API
+## Static Array
+
+`StaticArray` in `src/static_array.py`
+
+Fixed-size array.
 
 ```python
 from static_array import StaticArray
 
 arr = StaticArray(5)
-
-arr.fill(0)           # fill all elements
-arr[0] = 10           # unchecked access
-arr.at(1)             # checked access (raises IndexError)
-arr.set_at(1, 20)     # checked write (raises IndexError)
-arr.front()           # first element
-arr.back()            # last element
-arr.data()            # underlying list reference
-arr.size()            # returns the fixed size
-arr.empty()           # True if size is 0
-len(arr)              # also returns the fixed size
+arr.fill(0)
+arr[0] = 10
+arr.at(1)             # raises IndexError if out of bounds
+arr.set_at(1, 20)     # raises IndexError if out of bounds
 
 for v in arr:         # iteration works
     pass
 ```
 
-### Zero-size arrays
+Also supports: `front()`, `back()`, `data()`, `size()`, `empty()`, `len()`.
 
-`StaticArray(0)` is valid. `data()` returns `None`, `at()` always raises, iteration is a no-op.
+Zero-size (`StaticArray(0)`) is handled — `data()` returns `None`, `at()` always raises.
+
+## Dynamic Array
+
+`DynamicArray` in `src/dynamic_array.py`
+
+Resizable array.
+
+```python
+from dynamic_array import DynamicArray
+
+arr = DynamicArray()
+arr.push_back(10)
+arr.push_back(20)
+arr.at(0)             # raises IndexError if out of bounds
+arr.reserve(100)      # pre-allocate capacity
+arr.pop_back()
+arr.clear()
+
+for v in arr:         # iteration works
+    pass
+```
+
+Also supports: `front()`, `back()`, `data()`, `size()`, `capacity()`, `empty()`, `copy()`, `len()`.
+
+Growth strategy doubles capacity when exceeded.

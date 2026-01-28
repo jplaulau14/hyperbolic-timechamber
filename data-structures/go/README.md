@@ -1,37 +1,55 @@
 # Go Data Structures
 
-## Static Array
+Requires Go 1.21+.
 
-`StaticArray[T]` — fixed-size generic array. No external dependencies.
-
-### Run tests
+## Run Tests
 
 ```bash
-cd data-structures/go
 go test -v ./...
 ```
 
-### API
+## Static Array
+
+`StaticArray[T]` in `src/staticarray/static_array.go`
+
+Fixed-size generic array.
 
 ```go
-import "staticarray"
+import "github.com/hyperbolic-timechamber/data-structures-go/src/staticarray"
 
 arr := staticarray.New[int](5)
+arr.Fill(0)
+arr.Set(0, 10)
+arr.At(1)             // checked access (returns value, error)
+arr.Get(1)            // unchecked access
 
-arr.Fill(0)               // fill all elements
-arr.Set(0, 10)            // unchecked write
-arr.Get(0)                // unchecked read
-arr.SetAt(1, 20)          // checked write (returns error)
-arr.At(1)                 // checked read (returns value, error)
-arr.Front()               // first element
-arr.Back()                // last element
-arr.Data()                // underlying slice
-arr.Size()                // returns the fixed size
-arr.IsEmpty()             // true if size is 0
-
-for _, v := range arr.Data() { /* works */ }
+for _, v := range arr.Data() { /* iteration works */ }
 ```
 
-### Zero-size arrays
+Also supports: `SetAt()`, `Front()`, `Back()`, `Data()`, `Size()`, `IsEmpty()`.
 
-`New[T](0)` is valid. `Data()` returns `nil`, `At()` always returns `ErrOutOfRange`, iteration over `Data()` is a no-op.
+Zero-size (`New[T](0)`) is handled — `Data()` returns `nil`, `At()` always returns `ErrOutOfRange`.
+
+## Dynamic Array
+
+`DynamicArray[T]` in `src/dynamicarray/dynamic_array.go`
+
+Resizable generic array.
+
+```go
+import "github.com/hyperbolic-timechamber/data-structures-go/src/dynamicarray"
+
+arr := dynamicarray.New[int]()
+arr.PushBack(10)
+arr.PushBack(20)
+arr.At(0)             // checked access (returns value, error)
+arr.Reserve(100)      // pre-allocate capacity
+arr.PopBack()
+arr.Clear()
+
+for _, v := range arr.Data() { /* iteration works */ }
+```
+
+Also supports: `SetAt()`, `Get()`, `Set()`, `Front()`, `Back()`, `Data()`, `Size()`, `Capacity()`, `IsEmpty()`, `Clone()`.
+
+Growth strategy doubles capacity when exceeded.

@@ -1,37 +1,57 @@
 # C++ Data Structures
 
-## Static Array
+Requires CMake and a C++17 compiler.
 
-Header-only `StaticArray<T, N>` — fixed-size, stack-allocated array. No STL containers, just `<stdexcept>` and `<cstddef>`.
-
-### Build & run tests
+## Build & Test
 
 ```bash
-cd data-structures/cpp
 cmake -B build
 cmake --build build
 ./build/static_array_test
+./build/dynamic_array_test
 ```
 
-### API
+## Static Array
+
+`StaticArray<T, N>` in `src/static_array.hpp`
+
+Stack-allocated, fixed-size array. Header-only.
 
 ```cpp
 #include "static_array.hpp"
 
 StaticArray<int, 5> arr;
+arr.fill(0);
+arr[0] = 10;
+arr.at(1) = 20;       // throws std::out_of_range if out of bounds
 
-arr.fill(0);          // fill all elements
-arr[0] = 10;          // unchecked access
-arr.at(1) = 20;       // checked access (throws std::out_of_range)
-arr.front();          // first element
-arr.back();           // last element
-arr.data();           // raw T* pointer
-arr.size();           // returns N (compile-time constant)
-arr.empty();          // true if N == 0
-
-for (auto& v : arr) { /* range-based for works */ }
+for (auto& v : arr) { /* iteration works */ }
 ```
 
-### Zero-size arrays
+Also supports: `front()`, `back()`, `data()`, `size()`, `empty()`, `begin()`/`end()`.
 
-`StaticArray<T, 0>` is a valid partial specialization. `data()` returns `nullptr`, `at()` always throws, iterators are `nullptr` so range-for is a no-op.
+Zero-size (`StaticArray<T, 0>`) is handled — `data()` returns `nullptr`, `at()` always throws.
+
+## Dynamic Array
+
+`DynamicArray<T>` in `src/dynamic_array.hpp`
+
+Heap-allocated, resizable array. Header-only.
+
+```cpp
+#include "dynamic_array.hpp"
+
+DynamicArray<int> arr;
+arr.push_back(10);
+arr.push_back(20);
+arr.at(0);            // throws std::out_of_range if out of bounds
+arr.reserve(100);     // pre-allocate capacity
+arr.pop_back();
+arr.clear();
+
+for (auto& v : arr) { /* iteration works */ }
+```
+
+Also supports: `front()`, `back()`, `data()`, `size()`, `capacity()`, `empty()`, `begin()`/`end()`.
+
+Copy/move constructors and assignment operators are implemented. Growth strategy doubles capacity when exceeded.
