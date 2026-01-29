@@ -290,6 +290,39 @@ TEST(empty_data_pointer) {
     assert(arr.data() == nullptr);
 }
 
+TEST(front_throws_on_empty) {
+    DynamicArray<int> arr;
+    bool threw = false;
+    try {
+        arr.front();
+    } catch (const std::out_of_range&) {
+        threw = true;
+    }
+    assert(threw);
+}
+
+TEST(back_throws_on_empty) {
+    DynamicArray<int> arr;
+    bool threw = false;
+    try {
+        arr.back();
+    } catch (const std::out_of_range&) {
+        threw = true;
+    }
+    assert(threw);
+}
+
+TEST(pop_back_throws_on_empty) {
+    DynamicArray<int> arr;
+    bool threw = false;
+    try {
+        arr.pop_back();
+    } catch (const std::out_of_range&) {
+        threw = true;
+    }
+    assert(threw);
+}
+
 TEST(const_access) {
     DynamicArray<int> arr;
     arr.push_back(1);

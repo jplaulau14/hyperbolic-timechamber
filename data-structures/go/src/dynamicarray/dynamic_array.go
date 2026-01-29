@@ -3,6 +3,7 @@ package dynamicarray
 import "errors"
 
 var ErrOutOfRange = errors.New("DynamicArray: index out of range")
+var ErrEmpty = errors.New("DynamicArray: array is empty")
 
 type DynamicArray[T any] struct {
 	data     []T
@@ -49,12 +50,20 @@ func (a *DynamicArray[T]) Set(index int, value T) {
 	a.data[index] = value
 }
 
-func (a *DynamicArray[T]) Front() T {
-	return a.data[0]
+func (a *DynamicArray[T]) Front() (T, error) {
+	var zero T
+	if a.size == 0 {
+		return zero, ErrEmpty
+	}
+	return a.data[0], nil
 }
 
-func (a *DynamicArray[T]) Back() T {
-	return a.data[a.size-1]
+func (a *DynamicArray[T]) Back() (T, error) {
+	var zero T
+	if a.size == 0 {
+		return zero, ErrEmpty
+	}
+	return a.data[a.size-1], nil
 }
 
 func (a *DynamicArray[T]) Data() []T {
@@ -98,11 +107,21 @@ func (a *DynamicArray[T]) PushBack(value T) {
 	a.size++
 }
 
-func (a *DynamicArray[T]) PopBack() {
+func (a *DynamicArray[T]) PopBack() error {
+	if a.size == 0 {
+		return ErrEmpty
+	}
 	a.size--
+	var zero T
+	a.data[a.size] = zero
+	return nil
 }
 
 func (a *DynamicArray[T]) Clear() {
+	var zero T
+	for i := 0; i < a.size; i++ {
+		a.data[i] = zero
+	}
 	a.size = 0
 }
 

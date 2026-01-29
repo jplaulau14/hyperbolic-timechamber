@@ -44,6 +44,8 @@ impl<T> LinkedList<T> {
         if self.tail.is_null() {
             self.head = Some(new_node);
         } else {
+            // SAFETY: tail is non-null and points to a valid Node that is owned by this list.
+            // The node remains valid because we only update tail when nodes are added/removed.
             unsafe {
                 (*self.tail).next = Some(new_node);
             }
@@ -95,6 +97,8 @@ impl<T> LinkedList<T> {
         if self.tail.is_null() {
             None
         } else {
+            // SAFETY: tail is non-null and points to a valid Node owned by this list.
+            // The reference lifetime is tied to &self, ensuring the node outlives the reference.
             unsafe { Some(&(*self.tail).value) }
         }
     }

@@ -211,6 +211,21 @@ class TestDynamicArray(unittest.TestCase):
         with self.assertRaises(ValueError):
             DynamicArray("three")
 
+    def test_front_empty(self):
+        arr = DynamicArray()
+        with self.assertRaises(IndexError):
+            arr.front()
+
+    def test_back_empty(self):
+        arr = DynamicArray()
+        with self.assertRaises(IndexError):
+            arr.back()
+
+    def test_pop_back_empty(self):
+        arr = DynamicArray()
+        with self.assertRaises(IndexError):
+            arr.pop_back()
+
 
 if __name__ == "__main__":
     unittest.main()

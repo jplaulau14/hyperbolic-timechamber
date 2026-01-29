@@ -3,17 +3,22 @@ package staticarray
 import "errors"
 
 var ErrOutOfRange = errors.New("StaticArray: index out of range")
+var ErrEmpty = errors.New("StaticArray: array is empty")
+var ErrNegativeSize = errors.New("StaticArray: size cannot be negative")
 
 type StaticArray[T any] struct {
 	data []T
 	size int
 }
 
-func New[T any](size int) *StaticArray[T] {
+func New[T any](size int) (*StaticArray[T], error) {
+	if size < 0 {
+		return nil, ErrNegativeSize
+	}
 	return &StaticArray[T]{
 		data: make([]T, size),
 		size: size,
-	}
+	}, nil
 }
 
 func (a *StaticArray[T]) At(index int) (T, error) {
@@ -40,12 +45,20 @@ func (a *StaticArray[T]) Set(index int, value T) {
 	a.data[index] = value
 }
 
-func (a *StaticArray[T]) Front() T {
-	return a.data[0]
+func (a *StaticArray[T]) Front() (T, error) {
+	var zero T
+	if a.size == 0 {
+		return zero, ErrEmpty
+	}
+	return a.data[0], nil
 }
 
-func (a *StaticArray[T]) Back() T {
-	return a.data[a.size-1]
+func (a *StaticArray[T]) Back() (T, error) {
+	var zero T
+	if a.size == 0 {
+		return zero, ErrEmpty
+	}
+	return a.data[a.size-1], nil
 }
 
 func (a *StaticArray[T]) Data() []T {

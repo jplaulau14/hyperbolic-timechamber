@@ -8,7 +8,10 @@ import (
 )
 
 func TestSizeAndEmpty(t *testing.T) {
-	arr := staticarray.New[int](5)
+	arr, err := staticarray.New[int](5)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if arr.Size() != 5 {
 		t.Fatalf("expected size 5, got %d", arr.Size())
 	}
@@ -16,7 +19,10 @@ func TestSizeAndEmpty(t *testing.T) {
 		t.Fatal("expected non-empty")
 	}
 
-	empty := staticarray.New[int](0)
+	empty, err := staticarray.New[int](0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if empty.Size() != 0 {
 		t.Fatalf("expected size 0, got %d", empty.Size())
 	}
@@ -26,7 +32,7 @@ func TestSizeAndEmpty(t *testing.T) {
 }
 
 func TestFillAndAccess(t *testing.T) {
-	arr := staticarray.New[int](4)
+	arr, _ := staticarray.New[int](4)
 	arr.Fill(42)
 	for i := 0; i < arr.Size(); i++ {
 		if arr.Get(i) != 42 {
@@ -36,7 +42,7 @@ func TestFillAndAccess(t *testing.T) {
 }
 
 func TestGetSet(t *testing.T) {
-	arr := staticarray.New[int](3)
+	arr, _ := staticarray.New[int](3)
 	arr.Set(0, 10)
 	arr.Set(1, 20)
 	arr.Set(2, 30)
@@ -46,7 +52,7 @@ func TestGetSet(t *testing.T) {
 }
 
 func TestAtValidIndex(t *testing.T) {
-	arr := staticarray.New[int](3)
+	arr, _ := staticarray.New[int](3)
 	arr.SetAt(0, 100)
 	arr.SetAt(1, 200)
 	arr.SetAt(2, 300)
@@ -63,7 +69,7 @@ func TestAtValidIndex(t *testing.T) {
 }
 
 func TestAtOutOfRange(t *testing.T) {
-	arr := staticarray.New[int](3)
+	arr, _ := staticarray.New[int](3)
 	_, err := arr.At(3)
 	if !errors.Is(err, staticarray.ErrOutOfRange) {
 		t.Fatal("expected ErrOutOfRange for index 3")
@@ -75,7 +81,7 @@ func TestAtOutOfRange(t *testing.T) {
 }
 
 func TestAtOnZeroSize(t *testing.T) {
-	arr := staticarray.New[int](0)
+	arr, _ := staticarray.New[int](0)
 	_, err := arr.At(0)
 	if !errors.Is(err, staticarray.ErrOutOfRange) {
 		t.Fatal("expected ErrOutOfRange on zero-size array")
@@ -83,7 +89,7 @@ func TestAtOnZeroSize(t *testing.T) {
 }
 
 func TestSetAtOutOfRange(t *testing.T) {
-	arr := staticarray.New[int](3)
+	arr, _ := staticarray.New[int](3)
 	if err := arr.SetAt(3, 0); !errors.Is(err, staticarray.ErrOutOfRange) {
 		t.Fatal("expected ErrOutOfRange for SetAt index 3")
 	}
@@ -93,20 +99,40 @@ func TestSetAtOutOfRange(t *testing.T) {
 }
 
 func TestFrontAndBack(t *testing.T) {
-	arr := staticarray.New[int](4)
+	arr, _ := staticarray.New[int](4)
 	arr.Fill(0)
 	arr.Set(0, 1)
 	arr.Set(3, 99)
-	if arr.Front() != 1 {
-		t.Fatalf("expected front 1, got %d", arr.Front())
+	front, err := arr.Front()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
-	if arr.Back() != 99 {
-		t.Fatalf("expected back 99, got %d", arr.Back())
+	if front != 1 {
+		t.Fatalf("expected front 1, got %d", front)
+	}
+	back, err := arr.Back()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if back != 99 {
+		t.Fatalf("expected back 99, got %d", back)
+	}
+}
+
+func TestFrontAndBackEmpty(t *testing.T) {
+	arr, _ := staticarray.New[int](0)
+	_, err := arr.Front()
+	if !errors.Is(err, staticarray.ErrEmpty) {
+		t.Fatal("expected ErrEmpty for Front on empty array")
+	}
+	_, err = arr.Back()
+	if !errors.Is(err, staticarray.ErrEmpty) {
+		t.Fatal("expected ErrEmpty for Back on empty array")
 	}
 }
 
 func TestDataSlice(t *testing.T) {
-	arr := staticarray.New[int](3)
+	arr, _ := staticarray.New[int](3)
 	arr.Fill(7)
 	d := arr.Data()
 	if d[0] != 7 || d[1] != 7 || d[2] != 7 {
@@ -120,14 +146,14 @@ func TestDataSlice(t *testing.T) {
 }
 
 func TestDataZeroSize(t *testing.T) {
-	arr := staticarray.New[int](0)
+	arr, _ := staticarray.New[int](0)
 	if arr.Data() != nil {
 		t.Fatal("expected nil data for zero-size array")
 	}
 }
 
 func TestIteration(t *testing.T) {
-	arr := staticarray.New[int](5)
+	arr, _ := staticarray.New[int](5)
 	arr.Fill(3)
 	sum := 0
 	for _, v := range arr.Data() {
@@ -139,7 +165,7 @@ func TestIteration(t *testing.T) {
 }
 
 func TestNonTrivialType(t *testing.T) {
-	arr := staticarray.New[string](3)
+	arr, _ := staticarray.New[string](3)
 	arr.Set(0, "hello")
 	arr.Set(1, "world")
 	arr.Set(2, "!")
@@ -150,13 +176,14 @@ func TestNonTrivialType(t *testing.T) {
 	if v != "world" {
 		t.Fatal("expected world")
 	}
-	if arr.Back() != "!" {
+	back, _ := arr.Back()
+	if back != "!" {
 		t.Fatal("expected !")
 	}
 }
 
 func TestFillOverwrites(t *testing.T) {
-	arr := staticarray.New[int](3)
+	arr, _ := staticarray.New[int](3)
 	arr.Fill(1)
 	arr.Fill(2)
 	for i := 0; i < arr.Size(); i++ {
@@ -167,7 +194,7 @@ func TestFillOverwrites(t *testing.T) {
 }
 
 func TestZeroSizeIteration(t *testing.T) {
-	arr := staticarray.New[int](0)
+	arr, _ := staticarray.New[int](0)
 	count := 0
 	for range arr.Data() {
 		count++
@@ -178,13 +205,15 @@ func TestZeroSizeIteration(t *testing.T) {
 }
 
 func TestSingleElement(t *testing.T) {
-	arr := staticarray.New[int](1)
+	arr, _ := staticarray.New[int](1)
 	arr.Set(0, 42)
-	if arr.Front() != 42 {
-		t.Fatalf("expected front 42, got %d", arr.Front())
+	front, _ := arr.Front()
+	if front != 42 {
+		t.Fatalf("expected front 42, got %d", front)
 	}
-	if arr.Back() != 42 {
-		t.Fatalf("expected back 42, got %d", arr.Back())
+	back, _ := arr.Back()
+	if back != 42 {
+		t.Fatalf("expected back 42, got %d", back)
 	}
 	if arr.Size() != 1 {
 		t.Fatalf("expected size 1, got %d", arr.Size())
@@ -192,9 +221,20 @@ func TestSingleElement(t *testing.T) {
 }
 
 func TestNegativeIndexAt(t *testing.T) {
-	arr := staticarray.New[int](3)
+	arr, _ := staticarray.New[int](3)
 	_, err := arr.At(-1)
 	if !errors.Is(err, staticarray.ErrOutOfRange) {
 		t.Fatal("expected ErrOutOfRange for negative index")
+	}
+}
+
+func TestNewNegativeSize(t *testing.T) {
+	_, err := staticarray.New[int](-1)
+	if !errors.Is(err, staticarray.ErrNegativeSize) {
+		t.Fatal("expected ErrNegativeSize for negative size")
+	}
+	_, err = staticarray.New[int](-100)
+	if !errors.Is(err, staticarray.ErrNegativeSize) {
+		t.Fatal("expected ErrNegativeSize for negative size")
 	}
 }

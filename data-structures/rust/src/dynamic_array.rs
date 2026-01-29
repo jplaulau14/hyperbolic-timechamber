@@ -19,6 +19,9 @@ impl<T> DynamicArray<T> {
         }
         let layout = core::alloc::Layout::array::<T>(capacity).unwrap();
         let data = unsafe { std::alloc::alloc(layout) as *mut T };
+        if data.is_null() {
+            std::alloc::handle_alloc_error(layout);
+        }
         Self {
             data,
             size: 0,
@@ -88,6 +91,9 @@ impl<T> DynamicArray<T> {
         }
         let new_layout = core::alloc::Layout::array::<T>(new_cap).unwrap();
         let new_data = unsafe { std::alloc::alloc(new_layout) as *mut T };
+        if new_data.is_null() {
+            std::alloc::handle_alloc_error(new_layout);
+        }
         if !self.data.is_null() {
             unsafe {
                 core::ptr::copy_nonoverlapping(self.data, new_data, self.size);
@@ -176,6 +182,9 @@ impl<T: Default> Default for DynamicArray<T> {
         Self::new()
     }
 }
+
+unsafe impl<T: Send> Send for DynamicArray<T> {}
+unsafe impl<T: Sync> Sync for DynamicArray<T> {}
 
 #[cfg(test)]
 mod tests {

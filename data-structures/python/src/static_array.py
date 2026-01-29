@@ -22,9 +22,13 @@ class StaticArray:
         self._data[index] = value
 
     def front(self):
+        if self._size == 0:
+            raise IndexError("StaticArray.front: array is empty")
         return self._data[0]
 
     def back(self):
+        if self._size == 0:
+            raise IndexError("StaticArray.back: array is empty")
         return self._data[-1]
 
     def data(self):

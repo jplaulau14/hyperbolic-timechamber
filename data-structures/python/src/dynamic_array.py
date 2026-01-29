@@ -23,9 +23,13 @@ class DynamicArray:
         self._data[index] = value
 
     def front(self):
+        if self._size == 0:
+            raise IndexError("DynamicArray.front: array is empty")
         return self._data[0]
 
     def back(self):
+        if self._size == 0:
+            raise IndexError("DynamicArray.back: array is empty")
         return self._data[self._size - 1]
 
     def data(self):
@@ -59,6 +63,8 @@ class DynamicArray:
         self._size += 1
 
     def pop_back(self):
+        if self._size == 0:
+            raise IndexError("DynamicArray.pop_back: array is empty")
         self._size -= 1
 
     def clear(self):

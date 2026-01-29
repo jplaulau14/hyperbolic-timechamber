@@ -91,19 +91,31 @@ func TestPopBack(t *testing.T) {
 	arr.PushBack(10)
 	arr.PushBack(20)
 	arr.PushBack(30)
-	arr.PopBack()
+	if err := arr.PopBack(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if arr.Size() != 2 {
 		t.Fatalf("expected size 2, got %d", arr.Size())
 	}
-	if arr.Back() != 20 {
-		t.Fatalf("expected back 20, got %d", arr.Back())
+	back, err := arr.Back()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
-	arr.PopBack()
+	if back != 20 {
+		t.Fatalf("expected back 20, got %d", back)
+	}
+	if err := arr.PopBack(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if arr.Size() != 1 {
 		t.Fatalf("expected size 1, got %d", arr.Size())
 	}
-	if arr.Back() != 10 {
-		t.Fatalf("expected back 10, got %d", arr.Back())
+	back, err = arr.Back()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if back != 10 {
+		t.Fatalf("expected back 10, got %d", back)
 	}
 }
 
@@ -164,11 +176,19 @@ func TestFrontAndBack(t *testing.T) {
 	arr.PushBack(1)
 	arr.PushBack(2)
 	arr.PushBack(3)
-	if arr.Front() != 1 {
-		t.Fatalf("expected front 1, got %d", arr.Front())
+	front, err := arr.Front()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
-	if arr.Back() != 3 {
-		t.Fatalf("expected back 3, got %d", arr.Back())
+	if front != 1 {
+		t.Fatalf("expected front 1, got %d", front)
+	}
+	back, err := arr.Back()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if back != 3 {
+		t.Fatalf("expected back 3, got %d", back)
 	}
 }
 
@@ -274,10 +294,18 @@ func TestNonTrivialType(t *testing.T) {
 	if arr.Get(0) != "hello" || arr.Get(1) != "world" {
 		t.Fatal("values mismatch")
 	}
-	if arr.Front() != "hello" {
+	front, err := arr.Front()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if front != "hello" {
 		t.Fatal("expected front hello")
 	}
-	if arr.Back() != "world" {
+	back, err := arr.Back()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if back != "world" {
 		t.Fatal("expected back world")
 	}
 }
@@ -320,5 +348,41 @@ func TestSetAtOutOfRange(t *testing.T) {
 	}
 	if err := arr.SetAt(-1, 0); !errors.Is(err, dynamicarray.ErrOutOfRange) {
 		t.Fatal("expected ErrOutOfRange for SetAt index -1")
+	}
+}
+
+func TestFrontEmpty(t *testing.T) {
+	arr := dynamicarray.New[int]()
+	_, err := arr.Front()
+	if !errors.Is(err, dynamicarray.ErrEmpty) {
+		t.Fatal("expected ErrEmpty for Front on empty array")
+	}
+}
+
+func TestBackEmpty(t *testing.T) {
+	arr := dynamicarray.New[int]()
+	_, err := arr.Back()
+	if !errors.Is(err, dynamicarray.ErrEmpty) {
+		t.Fatal("expected ErrEmpty for Back on empty array")
+	}
+}
+
+func TestPopBackEmpty(t *testing.T) {
+	arr := dynamicarray.New[int]()
+	err := arr.PopBack()
+	if !errors.Is(err, dynamicarray.ErrEmpty) {
+		t.Fatal("expected ErrEmpty for PopBack on empty array")
+	}
+}
+
+func TestClearZerosElements(t *testing.T) {
+	arr := dynamicarray.New[*int]()
+	a, b, c := 1, 2, 3
+	arr.PushBack(&a)
+	arr.PushBack(&b)
+	arr.PushBack(&c)
+	arr.Clear()
+	if arr.Size() != 0 {
+		t.Fatalf("expected size 0, got %d", arr.Size())
 	}
 }

@@ -1,3 +1,4 @@
+#[derive(Debug)]
 pub struct StaticArray<T, const N: usize> {
     data: [T; N],
 }

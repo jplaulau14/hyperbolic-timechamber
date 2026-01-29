@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <iterator>
 #include <stdexcept>
 #include <utility>
 
@@ -19,9 +20,16 @@ public:
 
     class Iterator {
     public:
+        using value_type = T;
+        using difference_type = std::ptrdiff_t;
+        using pointer = T*;
+        using reference = T&;
+        using iterator_category = std::forward_iterator_tag;
+
         Iterator(Node* node) : current_(node) {}
         T& operator*() { return current_->value; }
         Iterator& operator++() { current_ = current_->next; return *this; }
+        Iterator operator++(int) { Iterator tmp = *this; ++(*this); return tmp; }
         bool operator!=(const Iterator& other) const { return current_ != other.current_; }
     private:
         Node* current_;
@@ -184,7 +192,7 @@ public:
     const T& at(size_type index) const {
         if (index >= size_)
             throw std::out_of_range("LinkedList::at: index out of range");
-        Node* curr = head_;
+        const Node* curr = head_;
         for (size_type i = 0; i < index; ++i)
             curr = curr->next;
         return curr->value;

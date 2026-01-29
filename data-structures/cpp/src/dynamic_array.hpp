@@ -74,11 +74,27 @@ public:
     T& operator[](size_type index) { return data_[index]; }
     const T& operator[](size_type index) const { return data_[index]; }
 
-    T& front() { return data_[0]; }
-    const T& front() const { return data_[0]; }
+    T& front() {
+        if (size_ == 0)
+            throw std::out_of_range("DynamicArray::front: array is empty");
+        return data_[0];
+    }
+    const T& front() const {
+        if (size_ == 0)
+            throw std::out_of_range("DynamicArray::front: array is empty");
+        return data_[0];
+    }
 
-    T& back() { return data_[size_ - 1]; }
-    const T& back() const { return data_[size_ - 1]; }
+    T& back() {
+        if (size_ == 0)
+            throw std::out_of_range("DynamicArray::back: array is empty");
+        return data_[size_ - 1];
+    }
+    const T& back() const {
+        if (size_ == 0)
+            throw std::out_of_range("DynamicArray::back: array is empty");
+        return data_[size_ - 1];
+    }
 
     T* data() { return data_; }
     const T* data() const { return data_; }
@@ -110,9 +126,18 @@ public:
         data_[size_++] = std::move(value);
     }
 
-    void pop_back() { --size_; }
+    void pop_back() {
+        if (size_ == 0)
+            throw std::out_of_range("DynamicArray::pop_back: array is empty");
+        --size_;
+        data_[size_].~T();
+    }
 
-    void clear() { size_ = 0; }
+    void clear() {
+        for (size_type i = 0; i < size_; ++i)
+            data_[i].~T();
+        size_ = 0;
+    }
 
     iterator begin() { return data_; }
     const_iterator begin() const { return data_; }
