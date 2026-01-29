@@ -130,12 +130,12 @@ public:
         if (size_ == 0)
             throw std::out_of_range("DynamicArray::pop_back: array is empty");
         --size_;
-        data_[size_].~T();
+        data_[size_] = T();
     }
 
     void clear() {
         for (size_type i = 0; i < size_; ++i)
-            data_[i].~T();
+            data_[i] = T();
         size_ = 0;
     }
 
