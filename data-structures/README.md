@@ -8,6 +8,11 @@ Implementations from scratch, no standard library containers. Personal reference
 |----------------|-----|--------|------|-----|
 | Static Array | ✓ | ✓ | ✓ | ✓ |
 | Dynamic Array | ✓ | ✓ | ✓ | ✓ |
+| Linked List | ✓ | ✓ | ✓ | ✓ |
+| Stack | ✓ | ✓ | ✓ | ✓ |
+| Queue | ✓ | ✓ | ✓ | ✓ |
+| Hash Map | ✓ | ✓ | ✓ | ✓ |
+| Binary Heap | ✓ | ✓ | ✓ | ✓ |
 
 ## C++
 
@@ -19,6 +24,11 @@ cmake -B build
 cmake --build build
 ./build/static_array_test
 ./build/dynamic_array_test
+./build/linked_list_test
+./build/stack_test
+./build/queue_test
+./build/hash_map_test
+./build/binary_heap_test
 ```
 
 ## Python

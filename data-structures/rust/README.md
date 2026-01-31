@@ -52,3 +52,113 @@ for v in &arr { /* iteration works */ }
 Also supports: `at_mut()`, `front()`, `back()`, `data()`, `size()`, `capacity()`, `is_empty()`, `iter()`, `clone()`.
 
 Growth strategy doubles capacity when exceeded. Implements `Drop` for proper cleanup.
+
+## Linked List
+
+`LinkedList<T>` in `src/linked_list.rs`
+
+Singly linked list with head/tail pointers using `Option<Box<Node<T>>>`.
+
+```rust
+use data_structures::LinkedList;
+
+let mut list: LinkedList<i32> = LinkedList::new();
+list.push_back(10);
+list.push_front(5);
+list.front();         // checked access (returns Option<&T>)
+list.back();
+list.at(1);           // checked access (returns Option<&T>)
+list.pop_front();     // returns Option<T>
+list.pop_back();
+
+for v in &list { /* iteration works */ }
+```
+
+Also supports: `insert_at()`, `remove_at()`, `size()`, `is_empty()`, `clear()`, `iter()`, `clone()`.
+
+Implements `Drop` for proper cleanup, `Clone` for deep copy, `Default`, and `IntoIterator`.
+
+## Stack
+
+`Stack<T>` in `src/stack.rs`
+
+LIFO container built on Vec.
+
+```rust
+use data_structures::Stack;
+
+let mut s: Stack<i32> = Stack::new();
+s.push(10);
+s.push(20);
+s.top();      // Some(&20)
+s.pop();      // Some(20)
+s.size();     // 1
+```
+
+Methods: `push()`, `pop()`, `top()`, `size()`, `is_empty()`, `clear()`.
+
+Implements `Clone` and `Default`.
+
+## Queue
+
+`Queue<T>` in `src/queue.rs`
+
+FIFO container using circular buffer with raw allocation.
+
+```rust
+use data_structures::Queue;
+
+let mut q: Queue<i32> = Queue::new();
+q.enqueue(10);
+q.enqueue(20);
+q.front();    // Some(&10)
+q.dequeue();  // Some(10)
+q.size();     // 1
+```
+
+Methods: `enqueue()`, `dequeue()`, `front()`, `back()`, `size()`, `is_empty()`, `clear()`.
+
+Implements `Drop`, `Clone`, and `Default`.
+
+## Hash Map
+
+`HashMap<K, V>` in `src/hash_map.rs`
+
+Key-value store with O(1) average operations using separate chaining.
+
+```rust
+use data_structures::HashMap;
+
+let mut map: HashMap<&str, i32> = HashMap::new();
+map.insert("one", 1);
+map.insert("two", 2);
+map.get(&"one");       // Some(&1)
+map.contains(&"two");  // true
+map.remove(&"one");    // Some(1)
+```
+
+Methods: `insert()`, `get()`, `get_mut()`, `remove()`, `contains()`, `size()`, `is_empty()`, `clear()`, `keys()`, `values()`, `capacity()`.
+
+Implements `Clone` (where K, V: Clone) and `Default`. Rehashes when load factor exceeds 0.75.
+
+## Binary Heap
+
+`BinaryHeap<T>` in `src/binary_heap.rs`
+
+Min-heap with O(log n) push/pop.
+
+```rust
+use data_structures::BinaryHeap;
+
+let mut heap: BinaryHeap<i32> = BinaryHeap::new();
+heap.push(30);
+heap.push(10);
+heap.push(20);
+heap.peek();  // Some(&10)
+heap.pop();   // Some(10)
+heap.pop();   // Some(20)
+```
+
+Methods: `push()`, `pop()`, `peek()`, `size()`, `is_empty()`, `clear()`, `from_vec()`.
+
+Implements `Clone` (where T: Clone), `Default`, and `FromIterator`.
