@@ -5,6 +5,7 @@ mod stack;
 mod queue;
 mod hash_map;
 mod binary_heap;
+mod binary_search_tree;
 
 pub use static_array::StaticArray;
 pub use dynamic_array::DynamicArray;
@@ -13,3 +14,4 @@ pub use stack::Stack;
 pub use queue::Queue;
 pub use hash_map::HashMap;
 pub use binary_heap::BinaryHeap;
+pub use binary_search_tree::BinarySearchTree;

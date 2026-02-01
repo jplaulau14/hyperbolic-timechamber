@@ -1,32 +1,272 @@
-# Build artifacts
+# =============================================================================
+# C / C++ Build Artifacts
+# =============================================================================
 build/
+build_*/
 cmake-build-*/
+out/
 CMakeCache.txt
 CMakeFiles/
-
-# Compiled objects
+cmake_install.cmake
+Makefile
 *.o
 *.obj
 *.a
 *.so
+*.so.*
 *.dylib
+*.dll
+*.lib
+*.exe
+*.out
+*.app
+*.dSYM/
+compile_commands.json
+.cache/
+_deps/
 
-# IDE / editor
+# =============================================================================
+# Python
+# =============================================================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+env.bak/
+venv.bak/
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+parts/
+sdist/
+develop-eggs/
+.installed.cfg
+lib/
+lib64/
+*.manifest
+*.spec
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+.nox/
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+pytest_cache/
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pytype/
+.ruff_cache/
+.pdm.toml
+__pypackages__/
+pyrightconfig.json
+
+# =============================================================================
+# Rust
+# =============================================================================
+target/
+Cargo.lock
+**/*.rs.bk
+*.pdb
+
+# =============================================================================
+# Go
+# =============================================================================
+bin/
+pkg/
+*.exe
+*.exe~
+*.test
+*.out
+go.work
+vendor/
+
+# =============================================================================
+# IDE / Editors
+# =============================================================================
+# VS Code
 .vscode/
+*.code-workspace
+
+# JetBrains (IntelliJ, CLion, GoLand, PyCharm, RustRover)
 .idea/
+*.iml
+*.ipr
+*.iws
+out/
+.idea_modules/
+
+# Visual Studio
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.ncb
+*.aps
+*.cachefile
+*.psess
+*.vsp
+*.vspx
+*.sap
+*.e2e
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Bb]in/
+[Oo]bj/
+
+# Vim / Neovim
 *.swp
 *.swo
+*.swn
 *~
+.netrwhist
+Session.vim
+tags
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+.\#*
+.org-id-locations
+*_archive
+*.org-archive
+ltximg/
+
+# Sublime Text
+*.sublime-workspace
+*.sublime-project
+
+# Xcode
+*.xcodeproj/
+*.xcworkspace/
+xcuserdata/
+DerivedData/
+*.moved-aside
+*.pbxuser
+!default.pbxuser
+*.mode1v3
+!default.mode1v3
+*.mode2v3
+!default.mode2v3
+*.perspectivev3
+!default.perspectivev3
+*.hmap
+*.ipa
+*.dSYM.zip
+
+# =============================================================================
+# Operating System Files
+# =============================================================================
+# macOS
 .DS_Store
+.AppleDouble
+.LSOverride
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
 
-# Python
-__pycache__/
-*.pyc
-*.egg-info/
-.venv/
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+[Dd]esktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+*.lnk
 
-# Rust
-target/
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
 
-# Go
-bin/
+# =============================================================================
+# Version Control
+# =============================================================================
+.svn/
+.hg/
+.hgignore
+.hgsigs
+.hgtags
+
+# =============================================================================
+# Testing / Coverage
+# =============================================================================
+*.gcno
+*.gcda
+*.gcov
+lcov.info
+coverage/
+htmlcov/
+.nyc_output/
+
+# =============================================================================
+# Documentation
+# =============================================================================
+docs/_build/
+site/
+.docusaurus/
+
+# =============================================================================
+# Misc
+# =============================================================================
+*.log
+*.tmp
+*.temp
+*.bak
+*.backup
+*.orig
+*.rej
+*.patch
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+.secrets
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm/
+.yarn/

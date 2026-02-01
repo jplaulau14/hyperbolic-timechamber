@@ -24,3 +24,6 @@ target_include_directories(hash_map_test PRIVATE src)
 
 add_executable(binary_heap_test tests/binary_heap_test.cpp)
 target_include_directories(binary_heap_test PRIVATE src)
+
+add_executable(binary_search_tree_test tests/binary_search_tree_test.cpp)
+target_include_directories(binary_search_tree_test PRIVATE src)
