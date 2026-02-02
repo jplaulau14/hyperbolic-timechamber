@@ -13,6 +13,7 @@ Implementations from scratch, no standard library containers. Personal reference
 | Queue | ✓ | ✓ | ✓ | ✓ |
 | Hash Map | ✓ | ✓ | ✓ | ✓ |
 | Binary Heap | ✓ | ✓ | ✓ | ✓ |
+| Binary Search Tree | ✓ | ✓ | ✓ | ✓ |
 
 ## C++
 
@@ -29,6 +30,7 @@ cmake --build build
 ./build/queue_test
 ./build/hash_map_test
 ./build/binary_heap_test
+./build/binary_search_tree_test
 ```
 
 ## Python

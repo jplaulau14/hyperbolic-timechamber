@@ -162,3 +162,27 @@ heap.pop();   // Some(20)
 Methods: `push()`, `pop()`, `peek()`, `size()`, `is_empty()`, `clear()`, `from_vec()`.
 
 Implements `Clone` (where T: Clone), `Default`, and `FromIterator`.
+
+## Binary Search Tree
+
+`BinarySearchTree<T>` in `src/binary_search_tree.rs`
+
+Ordered binary tree with O(log n) average operations.
+
+```rust
+use data_structures::BinarySearchTree;
+
+let mut bst: BinarySearchTree<i32> = BinarySearchTree::new();
+bst.insert(50);
+bst.insert(30);
+bst.insert(70);
+bst.contains(&30);  // true
+bst.min();          // Some(&30)
+bst.max();          // Some(&70)
+bst.remove(&30);
+bst.in_order();     // [&50, &70]
+```
+
+Methods: `insert()`, `remove()`, `contains()`, `min()`, `max()`, `size()`, `is_empty()`, `clear()`, `in_order()`, `pre_order()`, `post_order()`.
+
+Implements `Clone` (where T: Clone), `Default`, and `IntoIterator`.

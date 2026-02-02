@@ -165,3 +165,25 @@ heap = BinaryHeap.from_array([5, 3, 8, 1])  # O(n) heapify
 ```
 
 Methods: `push()`, `pop()`, `peek()`, `size()`, `is_empty()`, `clear()`, `copy()`, `from_array()`, `len()`, `bool()`.
+
+## Binary Search Tree
+
+`BinarySearchTree` in `src/binary_search_tree.py`
+
+Ordered binary tree with O(log n) average operations.
+
+```python
+from binary_search_tree import BinarySearchTree
+
+bst = BinarySearchTree()
+bst.insert(50)
+bst.insert(30)
+bst.insert(70)
+bst.contains(30)   # True
+bst.min()          # 30
+bst.max()          # 70
+bst.remove(30)
+bst.in_order()     # [50, 70]
+```
+
+Methods: `insert()`, `remove()`, `contains()`, `min()`, `max()`, `size()`, `is_empty()`, `clear()`, `copy()`, `in_order()`, `pre_order()`, `post_order()`, `len()`, `in`, `iter()`.

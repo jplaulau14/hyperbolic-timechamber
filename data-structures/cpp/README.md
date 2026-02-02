@@ -14,6 +14,7 @@ cmake --build build
 ./build/queue_test
 ./build/hash_map_test
 ./build/binary_heap_test
+./build/binary_search_tree_test
 ```
 
 ## Static Array
@@ -165,3 +166,26 @@ auto heap2 = BinaryHeap<int>::from_array(arr, 4);
 ```
 
 Methods: `push()`, `pop()`, `peek()`, `size()`, `empty()`, `clear()`, `from_array()`.
+
+## Binary Search Tree
+
+`BinarySearchTree<T>` in `src/binary_search_tree.hpp`
+
+Ordered binary tree with O(log n) average operations.
+
+```cpp
+#include "binary_search_tree.hpp"
+
+BinarySearchTree<int> bst;
+bst.insert(50);
+bst.insert(30);
+bst.insert(70);
+bst.contains(30);  // true
+bst.min();         // 30
+bst.max();         // 70
+bst.remove(30);
+std::vector<int> sorted;
+bst.in_order(sorted);  // [50, 70]
+```
+
+Methods: `insert()`, `remove()`, `contains()`, `min()`, `max()`, `size()`, `empty()`, `clear()`, `in_order()`, `pre_order()`, `post_order()`.

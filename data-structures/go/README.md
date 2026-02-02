@@ -166,3 +166,27 @@ h2 := binaryheap.FromSlice([]int{5, 2, 8, 1})
 Methods: `Push()`, `Pop()`, `Peek()`, `Size()`, `IsEmpty()`, `Clear()`, `Clone()`, `FromSlice()`.
 
 Exports `ErrEmptyHeap` sentinel error.
+
+## Binary Search Tree
+
+`BinarySearchTree[T cmp.Ordered]` in `src/bst/binary_search_tree.go`
+
+Ordered binary tree with O(log n) average operations.
+
+```go
+import "github.com/hyperbolic-timechamber/data-structures-go/src/bst"
+
+t := bst.New[int]()
+t.Insert(50)
+t.Insert(30)
+t.Insert(70)
+t.Contains(30)  // true
+t.Min()         // (30, nil)
+t.Max()         // (70, nil)
+t.Remove(30)
+t.InOrder()     // [50, 70]
+```
+
+Methods: `Insert()`, `Remove()`, `Contains()`, `Min()`, `Max()`, `Size()`, `IsEmpty()`, `Clear()`, `Clone()`, `InOrder()`, `PreOrder()`, `PostOrder()`.
+
+Exports `ErrEmptyTree` sentinel error.
