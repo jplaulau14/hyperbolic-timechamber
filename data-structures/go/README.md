@@ -190,3 +190,30 @@ t.InOrder()     // [50, 70]
 Methods: `Insert()`, `Remove()`, `Contains()`, `Min()`, `Max()`, `Size()`, `IsEmpty()`, `Clear()`, `Clone()`, `InOrder()`, `PreOrder()`, `PostOrder()`.
 
 Exports `ErrEmptyTree` sentinel error.
+
+## AVL Tree
+
+`AVLTree[T cmp.Ordered]` in `src/avl/avl_tree.go`
+
+Self-balancing binary search tree with O(log n) guaranteed operations.
+
+```go
+import "github.com/hyperbolic-timechamber/data-structures-go/src/avl"
+
+t := avl.New[int]()
+t.Insert(50)
+t.Insert(30)
+t.Insert(70)
+t.Insert(20)        // Tree stays balanced
+t.Height()          // O(log n) guaranteed
+t.Contains(30)      // true
+t.Min()             // (20, nil)
+t.Max()             // (70, nil)
+t.IsBalanced()      // true
+t.Remove(30)
+t.InOrder()         // [20, 50, 70]
+```
+
+Methods: `Insert()`, `Remove()`, `Contains()`, `Min()`, `Max()`, `Size()`, `IsEmpty()`, `Clear()`, `Clone()`, `Height()`, `IsBalanced()`, `InOrder()`, `PreOrder()`, `PostOrder()`.
+
+Exports `ErrEmptyTree` sentinel error.

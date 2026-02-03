@@ -186,3 +186,30 @@ bst.in_order();     // [&50, &70]
 Methods: `insert()`, `remove()`, `contains()`, `min()`, `max()`, `size()`, `is_empty()`, `clear()`, `in_order()`, `pre_order()`, `post_order()`.
 
 Implements `Clone` (where T: Clone), `Default`, and `IntoIterator`.
+
+## AVL Tree
+
+`AVLTree<T>` in `src/avl_tree.rs`
+
+Self-balancing binary search tree with O(log n) guaranteed operations.
+
+```rust
+use data_structures::AVLTree;
+
+let mut avl: AVLTree<i32> = AVLTree::new();
+avl.insert(50);
+avl.insert(30);
+avl.insert(70);
+avl.insert(20);       // Tree stays balanced
+avl.height();         // O(log n) guaranteed
+avl.contains(&30);    // true
+avl.min();            // Some(&20)
+avl.max();            // Some(&70)
+avl.is_balanced();    // true
+avl.remove(&30);
+avl.in_order();       // [&20, &50, &70]
+```
+
+Methods: `insert()`, `remove()`, `contains()`, `min()`, `max()`, `size()`, `is_empty()`, `clear()`, `height()`, `is_balanced()`, `in_order()`, `pre_order()`, `post_order()`.
+
+Implements `Clone` (where T: Clone), `Default`, and `IntoIterator`.

@@ -15,6 +15,7 @@ cmake --build build
 ./build/hash_map_test
 ./build/binary_heap_test
 ./build/binary_search_tree_test
+./build/avl_tree_test
 ```
 
 ## Static Array
@@ -189,3 +190,29 @@ bst.in_order(sorted);  // [50, 70]
 ```
 
 Methods: `insert()`, `remove()`, `contains()`, `min()`, `max()`, `size()`, `empty()`, `clear()`, `in_order()`, `pre_order()`, `post_order()`.
+
+## AVL Tree
+
+`AVLTree<T>` in `src/avl_tree.hpp`
+
+Self-balancing binary search tree with O(log n) guaranteed operations.
+
+```cpp
+#include "avl_tree.hpp"
+
+AVLTree<int> avl;
+avl.insert(50);
+avl.insert(30);
+avl.insert(70);
+avl.insert(20);       // Tree stays balanced
+avl.height();         // O(log n) guaranteed
+avl.contains(30);     // true
+avl.min();            // 20
+avl.max();            // 70
+avl.is_balanced();    // true
+avl.remove(30);
+std::vector<int> sorted;
+avl.in_order(sorted); // [20, 50, 70]
+```
+
+Methods: `insert()`, `remove()`, `contains()`, `min()`, `max()`, `size()`, `empty()`, `clear()`, `height()`, `is_balanced()`, `in_order()`, `pre_order()`, `post_order()`.

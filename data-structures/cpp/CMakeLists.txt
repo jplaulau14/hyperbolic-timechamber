@@ -27,3 +27,6 @@ target_include_directories(binary_heap_test PRIVATE src)
 
 add_executable(binary_search_tree_test tests/binary_search_tree_test.cpp)
 target_include_directories(binary_search_tree_test PRIVATE src)
+
+add_executable(avl_tree_test tests/avl_tree_test.cpp)
+target_include_directories(avl_tree_test PRIVATE src)

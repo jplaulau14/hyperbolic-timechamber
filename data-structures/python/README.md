@@ -187,3 +187,28 @@ bst.in_order()     # [50, 70]
 ```
 
 Methods: `insert()`, `remove()`, `contains()`, `min()`, `max()`, `size()`, `is_empty()`, `clear()`, `copy()`, `in_order()`, `pre_order()`, `post_order()`, `len()`, `in`, `iter()`.
+
+## AVL Tree
+
+`AVLTree` in `src/avl_tree.py`
+
+Self-balancing binary search tree with O(log n) guaranteed operations.
+
+```python
+from avl_tree import AVLTree
+
+avl = AVLTree()
+avl.insert(50)
+avl.insert(30)
+avl.insert(70)
+avl.insert(20)        # Tree stays balanced
+avl.height()          # O(log n) guaranteed
+avl.contains(30)      # True
+avl.min()             # 20
+avl.max()             # 70
+avl.is_balanced()     # True
+avl.remove(30)
+avl.in_order()        # [20, 50, 70]
+```
+
+Methods: `insert()`, `remove()`, `contains()`, `min()`, `max()`, `size()`, `is_empty()`, `clear()`, `copy()`, `height()`, `is_balanced()`, `in_order()`, `pre_order()`, `post_order()`, `len()`, `in`, `iter()`.

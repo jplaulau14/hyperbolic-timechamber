@@ -14,6 +14,7 @@ Implementations from scratch, no standard library containers. Personal reference
 | Hash Map | ✓ | ✓ | ✓ | ✓ |
 | Binary Heap | ✓ | ✓ | ✓ | ✓ |
 | Binary Search Tree | ✓ | ✓ | ✓ | ✓ |
+| AVL Tree | ✓ | ✓ | ✓ | ✓ |
 
 ## C++
 
@@ -31,6 +32,7 @@ cmake --build build
 ./build/hash_map_test
 ./build/binary_heap_test
 ./build/binary_search_tree_test
+./build/avl_tree_test
 ```
 
 ## Python
