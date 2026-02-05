@@ -356,7 +356,10 @@ def example_5_sklearn_comparison():
     our_test_acc = our_model.score(X_test_scaled, y_test)
     our_probs = our_model.predict_proba(X_test_scaled)
 
-    sklearn_model = LogisticRegression(solver='lbfgs', max_iter=1000, random_state=SEED)
+    sklearn_model = LogisticRegression(
+        solver='lbfgs', max_iter=1000, random_state=SEED,
+        penalty=None,  # No regularization to match our implementation
+    )
     sklearn_model.fit(X_train_scaled, y_train)
 
     sklearn_train_acc = sklearn_model.score(X_train_scaled, y_train)
