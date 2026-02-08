@@ -8,24 +8,24 @@ Imagine you're building a system to classify handwritten digits (0-9). With bina
 
 What we really want is a model that looks at an image and says: "I'm 85% sure this is a 7, 10% sure it's a 1, 3% sure it's a 9, and 2% spread across everything else." That's a **probability distribution** over all classes, and it's exactly what softmax regression provides.
 
-The pain point is clear: binary classification doesn't scale to K classes in a principled way. We need a function that takes K raw scores and converts them into K probabilities that:
+The pain point is clear: binary classification doesn't scale to $K$ classes in a principled way. We need a function that takes $K$ raw scores and converts them into $K$ probabilities that:
 1. Are all positive
 2. Sum to exactly 1
 3. Preserve the relative ordering (higher score = higher probability)
 
 ### The Key Insight
 
-The exponential function is the hero of this story. If you have scores `[2, 1, 0]` and want probabilities, you could try just normalizing: `[2/3, 1/3, 0]`. But that fails immediately — what about negative scores like `[-1, 0, 1]`? Normalization gives `[negative, 0, positive]`, which isn't a valid probability.
+The exponential function is the hero of this story. If you have scores $[2, 1, 0]$ and want probabilities, you could try just normalizing: $[2/3, 1/3, 0]$. But that fails immediately — what about negative scores like $[-1, 0, 1]$? Normalization gives $[\text{negative}, 0, \text{positive}]$, which isn't a valid probability.
 
-The insight is: **exponentiate first, then normalize**. Since `exp(x) > 0` for all x, you guarantee positivity. Then dividing by the sum guarantees the probabilities sum to 1. This is softmax:
+The insight is: **exponentiate first, then normalize**. Since $e^x > 0$ for all $x$, you guarantee positivity. Then dividing by the sum guarantees the probabilities sum to 1. This is softmax:
 
-```
-softmax(z)_i = exp(z_i) / sum_j(exp(z_j))
-```
+$$
+\text{softmax}(z)_i = \frac{e^{z_i}}{\sum_j e^{z_j}}
+$$
 
 ### Real-World Analogy
 
-Think of softmax as a "voting with enthusiasm" system. Each class casts a vote, but not all votes are equal — the vote's weight is exponential in how confident the model is. A class with score 10 doesn't just get 2x the vote of a class with score 5; it gets `exp(10)/exp(5) = exp(5) = 148x` the vote. This exponential scaling means small differences in confidence become large differences in probability, creating a "soft" version of argmax (hence the name).
+Think of softmax as a "voting with enthusiasm" system. Each class casts a vote, but not all votes are equal — the vote's weight is exponential in how confident the model is. A class with score 10 doesn't just get 2x the vote of a class with score 5; it gets $e^{10}/e^{5} = e^{5} \approx 148$ times the vote. This exponential scaling means small differences in confidence become large differences in probability, creating a "soft" version of argmax (hence the name).
 
 ---
 
@@ -40,11 +40,11 @@ The softmax function has deep connections to geometry and information theory. Co
 3. **Monotonicity**: Higher logits should give higher probabilities
 4. **Differentiability**: We need gradients for learning
 
-The exponential function `exp(x)` satisfies all of these:
-- Always positive (maps R to R+)
+The exponential function $e^x$ satisfies all of these:
+- Always positive (maps $\mathbb{R}$ to $\mathbb{R}^+$)
 - Smooth and differentiable everywhere
 - Strictly increasing
-- Has a special property: `d/dx exp(x) = exp(x)` (derivative equals itself)
+- Has a special property: $\frac{d}{dx} e^x = e^x$ (derivative equals itself)
 
 But there's a deeper reason. Softmax is the **unique** function that maximizes entropy subject to a linear constraint on expected values. In other words, it's the "least biased" way to convert scores to probabilities while respecting the relative ordering.
 
@@ -69,19 +69,17 @@ The probability simplex for K=3:
 - Center (1/3, 1/3, 1/3) is maximum uncertainty
 ```
 
-Softmax maps any point in R^K to a point on this simplex. The mapping is smooth and covers the entire interior of the simplex (but never quite reaches the vertices — you'd need infinite logits for that).
+Softmax maps any point in $\mathbb{R}^K$ to a point on this simplex. The mapping is smooth and covers the entire interior of the simplex (but never quite reaches the vertices — you'd need infinite logits for that).
 
 ### The Formula in Detail
 
-For a logit vector z = [z_1, z_2, ..., z_K]:
+For a logit vector $z = [z_1, z_2, \ldots, z_K]$:
 
-```
-                exp(z_i)
-softmax(z)_i = -----------
-               sum_j exp(z_j)
-```
+$$
+\text{softmax}(z)_i = \frac{e^{z_i}}{\sum_j e^{z_j}}
+$$
 
-Let's trace through with z = [2, 1, 0]:
+Let's trace through with $z = [2, 1, 0]$:
 
 ```
 exp(2) = 7.389
@@ -113,7 +111,7 @@ exp(1002) = inf
 inf / inf = NaN  # Disaster
 ```
 
-The exponential function grows incredibly fast. `exp(710)` is already larger than the largest float64 can represent.
+The exponential function grows incredibly fast. $e^{710}$ is already larger than the largest float64 can represent.
 
 ### The Solution: Shift Before Exponentiating
 
@@ -129,31 +127,21 @@ exp(-1) = 0.368
 exp(0)  = 1.000
 ```
 
-Now the largest exponent is `exp(0) = 1` — no overflow possible!
+Now the largest exponent is $e^0 = 1$ — no overflow possible!
 
 ### Proof of Equivalence
 
-Why does this give the same answer? Let c = max(z):
+Why does this give the same answer? Let $c = \max(z)$:
 
-```
-  exp(z_i - c)           exp(z_i) * exp(-c)
----------------- = ---------------------------
-sum_j exp(z_j - c)   sum_j [exp(z_j) * exp(-c)]
+$$
+\frac{e^{z_i - c}}{\sum_j e^{z_j - c}} = \frac{e^{z_i} \cdot e^{-c}}{\sum_j e^{z_j} \cdot e^{-c}} = \frac{e^{z_i} \cdot e^{-c}}{e^{-c} \cdot \sum_j e^{z_j}} = \frac{e^{z_i}}{\sum_j e^{z_j}}
+$$
 
-                   exp(z_i) * exp(-c)
-               = ---------------------
-                 exp(-c) * sum_j exp(z_j)
-
-                   exp(z_i)
-               = -------------
-                 sum_j exp(z_j)
-```
-
-The `exp(-c)` factor appears in both numerator and denominator, so it cancels. The result is identical to the original formula, but computed without overflow.
+The $e^{-c}$ factor appears in both numerator and denominator, so it cancels. The result is identical to the original formula, but computed without overflow.
 
 ### Why This Also Prevents Underflow
 
-What about very negative logits like `[-1000, -1000, -1000]`?
+What about very negative logits like $[-1000, -1000, -1000]$?
 
 Without the trick:
 ```
@@ -196,30 +184,30 @@ The `keepdims=True` is crucial for broadcasting. Without it, the shapes wouldn't
 
 ### Information Theory Connection
 
-Cross-entropy comes from information theory. The **entropy** of a distribution P measures uncertainty:
+Cross-entropy comes from information theory. The **entropy** of a distribution $P$ measures uncertainty:
 
-```
-H(P) = -sum_i P_i * log(P_i)
-```
+$$
+H(P) = -\sum_i P_i \log(P_i)
+$$
 
-The **cross-entropy** between the true distribution Y and predicted distribution P is:
+The **cross-entropy** between the true distribution $Y$ and predicted distribution $P$ is:
 
-```
-H(Y, P) = -sum_i Y_i * log(P_i)
-```
+$$
+H(Y, P) = -\sum_i Y_i \log(P_i)
+$$
 
-For one-hot labels (Y is 1 for the true class, 0 elsewhere), this simplifies beautifully:
+For one-hot labels ($Y$ is 1 for the true class, 0 elsewhere), this simplifies beautifully:
 
-```
-H(Y, P) = -log(P_c)   where c is the true class
-```
+$$
+H(Y, P) = -\log(P_c) \quad \text{where } c \text{ is the true class}
+$$
 
 This is exactly "negative log probability of the correct class" — a natural measure of how well the model predicts.
 
 ### Why Cross-Entropy?
 
 Consider alternatives:
-- **Mean squared error**: `(P - Y)^2` — Doesn't penalize confidently wrong predictions enough
+- **Mean squared error**: $(P - Y)^2$ — Doesn't penalize confidently wrong predictions enough
 - **0-1 loss**: 1 if wrong, 0 if right — Not differentiable
 
 Cross-entropy has the perfect gradient behavior:
@@ -229,23 +217,23 @@ Cross-entropy has the perfect gradient behavior:
 
 ### The Loss Function
 
-For a batch of n samples:
+For a batch of $n$ samples:
 
-```
-L = -(1/n) * sum_i sum_k Y_ik * log(P_ik)
-```
+$$
+L = -\frac{1}{n} \sum_i \sum_k Y_{ik} \log(P_{ik})
+$$
 
-Since Y is one-hot, only one term survives per sample:
+Since $Y$ is one-hot, only one term survives per sample:
 
-```
-L = -(1/n) * sum_i log(P_i,c_i)
-```
+$$
+L = -\frac{1}{n} \sum_i \log(P_{i, c_i})
+$$
 
-where c_i is the true class for sample i.
+where $c_i$ is the true class for sample $i$.
 
 ### Numerical Stability: The Epsilon Trick
 
-What if the model predicts P = 0 for the correct class? Then log(0) = -inf. We prevent this by clipping:
+What if the model predicts $P = 0$ for the correct class? Then $\log(0) = -\infty$. We prevent this by clipping:
 
 ```python
 def cross_entropy_loss(P: np.ndarray, Y: np.ndarray, eps: float = 1e-15) -> float:
@@ -254,105 +242,105 @@ def cross_entropy_loss(P: np.ndarray, Y: np.ndarray, eps: float = 1e-15) -> floa
     return float(-np.sum(Y * np.log(P_clipped)) / n)
 ```
 
-The tiny epsilon (10^-15) prevents log(0) while having negligible effect on the actual loss value.
+The tiny epsilon ($10^{-15}$) prevents $\log(0)$ while having negligible effect on the actual loss value.
 
 ---
 
-## The Elegant Gradient: P - Y
+## The Elegant Gradient: $P - Y$
 
 ### The Most Beautiful Result in ML
 
 The gradient of cross-entropy loss with respect to logits is simply:
 
-```
-dL/dZ = (1/n) * (P - Y)
-```
+$$
+\frac{\partial L}{\partial Z} = \frac{1}{n}(P - Y)
+$$
 
 That's it. Predictions minus targets. This elegant formula appears in linear regression, logistic regression, AND softmax regression. It's not a coincidence — it emerges from the mathematical structure of exponential families.
 
 ### Full Derivation
 
 Let's derive this step by step for a single sample. We have:
-- Logits: z = [z_1, ..., z_K]
-- Probabilities: p = softmax(z)
-- One-hot label: y (with y_c = 1 for true class c)
-- Loss: L = -log(p_c)
+- Logits: $z = [z_1, \ldots, z_K]$
+- Probabilities: $p = \text{softmax}(z)$
+- One-hot label: $y$ (with $y_c = 1$ for true class $c$)
+- Loss: $L = -\log(p_c)$
 
 **Step 1: Softmax Jacobian**
 
 First, we need the derivatives of softmax outputs with respect to logits.
 
-For the diagonal case (i = j):
-```
-dp_i/dz_i = d/dz_i [exp(z_i) / sum_k exp(z_k)]
+For the diagonal case ($i = j$):
 
-Using quotient rule:
-= [exp(z_i) * sum - exp(z_i) * exp(z_i)] / sum^2
-= exp(z_i)/sum * [1 - exp(z_i)/sum]
-= p_i * (1 - p_i)
-```
+$$
+\frac{\partial p_i}{\partial z_i} = \frac{\partial}{\partial z_i} \left[\frac{e^{z_i}}{\sum_k e^{z_k}}\right]
+$$
 
-For off-diagonal (i != j):
-```
-dp_i/dz_j = d/dz_j [exp(z_i) / sum_k exp(z_k)]
+Using the quotient rule:
 
-= exp(z_i) * (-1/sum^2) * exp(z_j)
-= -exp(z_i)/sum * exp(z_j)/sum
-= -p_i * p_j
-```
+$$
+= \frac{e^{z_i} \cdot S - e^{z_i} \cdot e^{z_i}}{S^2} = \frac{e^{z_i}}{S} \cdot \left(1 - \frac{e^{z_i}}{S}\right) = p_i(1 - p_i)
+$$
 
-Compactly: `dp_i/dz_j = p_i * (delta_ij - p_j)`
+where $S = \sum_k e^{z_k}$.
 
-where delta_ij is 1 if i=j, 0 otherwise.
+For off-diagonal ($i \neq j$):
+
+$$
+\frac{\partial p_i}{\partial z_j} = \frac{e^{z_i} \cdot (-1/S^2) \cdot e^{z_j}}{1} = -\frac{e^{z_i}}{S} \cdot \frac{e^{z_j}}{S} = -p_i \, p_j
+$$
+
+Compactly: $\frac{\partial p_i}{\partial z_j} = p_i(\delta_{ij} - p_j)$
+
+where $\delta_{ij}$ is 1 if $i = j$, 0 otherwise.
 
 **Step 2: Chain Rule**
 
-```
-dL/dz_i = sum_k (dL/dp_k) * (dp_k/dz_i)
-```
+$$
+\frac{\partial L}{\partial z_i} = \sum_k \frac{\partial L}{\partial p_k} \cdot \frac{\partial p_k}{\partial z_i}
+$$
 
-Since L = -log(p_c), we have dL/dp_k = -1/p_c if k=c, else 0.
+Since $L = -\log(p_c)$, we have $\frac{\partial L}{\partial p_k} = -1/p_c$ if $k = c$, else $0$.
 
-```
-dL/dz_i = (-1/p_c) * (dp_c/dz_i)
-```
+$$
+\frac{\partial L}{\partial z_i} = \frac{-1}{p_c} \cdot \frac{\partial p_c}{\partial z_i}
+$$
 
 **Step 3: Two Cases**
 
-*Case 1: i = c (gradient for the true class)*
-```
-dL/dz_c = (-1/p_c) * p_c * (1 - p_c)
-        = -(1 - p_c)
-        = p_c - 1
-```
+*Case 1: $i = c$ (gradient for the true class)*
 
-*Case 2: i != c (gradient for other classes)*
-```
-dL/dz_i = (-1/p_c) * (-p_c * p_i)
-        = p_i
-```
+$$
+\frac{\partial L}{\partial z_c} = \frac{-1}{p_c} \cdot p_c(1 - p_c) = -(1 - p_c) = p_c - 1
+$$
+
+*Case 2: $i \neq c$ (gradient for other classes)*
+
+$$
+\frac{\partial L}{\partial z_i} = \frac{-1}{p_c} \cdot (-p_c \, p_i) = p_i
+$$
 
 **Step 4: Unify with One-Hot**
 
-Since y_c = 1 and y_i = 0 for i != c:
-- When i = c: dL/dz_c = p_c - 1 = p_c - y_c
-- When i != c: dL/dz_i = p_i = p_i - y_i (since y_i = 0)
+Since $y_c = 1$ and $y_i = 0$ for $i \neq c$:
+- When $i = c$: $\frac{\partial L}{\partial z_c} = p_c - 1 = p_c - y_c$
+- When $i \neq c$: $\frac{\partial L}{\partial z_i} = p_i = p_i - y_i$ (since $y_i = 0$)
 
-Both cases: `dL/dz_i = p_i - y_i`
+Both cases: $\frac{\partial L}{\partial z_i} = p_i - y_i$
 
-In vector form: **dL/dz = p - y**
+In vector form: $\frac{\partial L}{\partial z} = p - y$
 
 **Step 5: Extend to Batches**
 
-For n samples, average the gradients:
+For $n$ samples, average the gradients:
 
-```
-dL/dZ = (1/n) * (P - Y)
-```
+$$
+\frac{\partial L}{\partial Z} = \frac{1}{n}(P - Y)
+$$
 
 ### Why Is This So Clean?
 
-The simplicity isn't accidental. Softmax + cross-entropy is a natural pairing from the exponential family of distributions. The "sufficient statistics" of the multinomial distribution are exactly the one-hot encoded labels, and the log-normalizer (log-sum-exp) has a gradient that is the expected value of the sufficient statistics (softmax probabilities). The gradient being P - Y follows from this structure.
+The simplicity isn't accidental. Softmax + cross-entropy is a natural pairing from the exponential family of distributions. The "sufficient statistics" of the multinomial distribution are exactly the one-hot encoded labels, and the log-normalizer (log-sum-exp) has a gradient that is the expected value of the sufficient statistics (softmax probabilities). The gradient being $P - Y$ follows from this structure.
 
 ---
 
@@ -380,16 +368,16 @@ True labels y: [0, 2]  (first sample is class 0, second is class 2)
 
 ### Forward Pass
 
-**Step 1: Compute Logits Z = XW + b**
+**Step 1: Compute Logits $Z = XW + b$**
 
-For sample 1: x = [1.0, 0.5, -0.5]
+For sample 1: $x = [1.0, 0.5, -0.5]$
 ```
 z_1 = 1.0*0.1 + 0.5*0.4 + (-0.5)*(-0.2) + 0.0 = 0.1 + 0.2 + 0.1 = 0.4
 z_2 = 1.0*0.2 + 0.5*(-0.1) + (-0.5)*0.3 + 0.1 = 0.2 - 0.05 - 0.15 + 0.1 = 0.1
 z_3 = 1.0*0.3 + 0.5*0.2 + (-0.5)*0.1 + (-0.1) = 0.3 + 0.1 - 0.05 - 0.1 = 0.25
 ```
 
-For sample 2: x = [0.2, -0.3, 0.8]
+For sample 2: $x = [0.2, -0.3, 0.8]$
 ```
 z_1 = 0.2*0.1 + (-0.3)*0.4 + 0.8*(-0.2) + 0.0 = 0.02 - 0.12 - 0.16 = -0.26
 z_2 = 0.2*0.2 + (-0.3)*(-0.1) + 0.8*0.3 + 0.1 = 0.04 + 0.03 + 0.24 + 0.1 = 0.41
@@ -403,7 +391,7 @@ Z = [[0.40, 0.10, 0.25],
 
 **Step 2: Apply Softmax**
 
-For sample 1: z = [0.40, 0.10, 0.25]
+For sample 1: $z = [0.40, 0.10, 0.25]$
 ```
 max(z) = 0.40
 z_shifted = [0.00, -0.30, -0.15]
@@ -412,7 +400,7 @@ sum = 2.602
 p = [0.384, 0.285, 0.331]
 ```
 
-For sample 2: z = [-0.26, 0.41, -0.02]
+For sample 2: $z = [-0.26, 0.41, -0.02]$
 ```
 max(z) = 0.41
 z_shifted = [-0.67, 0.00, -0.43]
@@ -436,39 +424,33 @@ Y = [[1, 0, 0],
 
 **Step 4: Compute Loss**
 
-```
-L = -(1/2) * [log(P[0,0]) + log(P[1,2])]
-  = -(1/2) * [log(0.384) + log(0.301)]
-  = -(1/2) * [-0.957 + (-1.201)]
-  = -(1/2) * (-2.158)
-  = 1.079
-```
+$$
+L = -\frac{1}{2}\bigl[\log(P_{0,0}) + \log(P_{1,2})\bigr] = -\frac{1}{2}\bigl[\log(0.384) + \log(0.301)\bigr]
+$$
+
+$$
+= -\frac{1}{2}\bigl[-0.957 + (-1.201)\bigr] = -\frac{1}{2}(-2.158) = 1.079
+$$
 
 ### Backward Pass
 
-**Step 1: Compute P - Y**
+**Step 1: Compute $P - Y$**
+
+$$
+P - Y = \begin{bmatrix} 0.384 & 0.285 & 0.331 \\ 0.237 & 0.462 & 0.301 \end{bmatrix} - \begin{bmatrix} 1 & 0 & 0 \\ 0 & 0 & 1 \end{bmatrix} = \begin{bmatrix} -0.616 & 0.285 & 0.331 \\ 0.237 & 0.462 & -0.699 \end{bmatrix}
+$$
+
+**Step 2: Compute $dW = \frac{1}{n} X^\top (P - Y)$**
+
+$$
+X^\top = \begin{bmatrix} 1.0 & 0.2 \\ 0.5 & -0.3 \\ -0.5 & 0.8 \end{bmatrix}
+$$
+
+$$
+dW = \frac{1}{2} X^\top (P - Y)
+$$
 
 ```
-P - Y = [[0.384, 0.285, 0.331],   -   [[1, 0, 0],
-         [0.237, 0.462, 0.301]]       [0, 0, 1]]
-
-      = [[-0.616, 0.285, 0.331],
-         [0.237, 0.462, -0.699]]
-```
-
-**Step 2: Compute dW = X^T @ (P - Y) / n**
-
-```
-X^T = [[1.0, 0.2],
-       [0.5, -0.3],
-       [-0.5, 0.8]]
-
-dW = X^T @ (P - Y) / 2
-
-    [[1.0, 0.2],       [[-0.616, 0.285, 0.331],
-     [0.5, -0.3],   @   [0.237, 0.462, -0.699]]  / 2
-     [-0.5, 0.8]]
-
 Row 1: [1.0*(-0.616) + 0.2*0.237, 1.0*0.285 + 0.2*0.462, 1.0*0.331 + 0.2*(-0.699)] / 2
      = [-0.569, 0.377, 0.191] / 2 = [-0.284, 0.189, 0.096]
 
@@ -477,26 +459,29 @@ Row 2: [0.5*(-0.616) + (-0.3)*0.237, ...] / 2
 
 Row 3: [(-0.5)*(-0.616) + 0.8*0.237, ...] / 2
      = [0.498, 0.227, -0.725] / 2 = [0.249, 0.114, -0.362]
-
-dW = [[-0.284, 0.189, 0.096],
-      [-0.190, 0.002, 0.188],
-      [0.249, 0.114, -0.362]]
 ```
 
-**Step 3: Compute db = mean(P - Y, axis=0)**
+$$
+dW = \begin{bmatrix} -0.284 & 0.189 & 0.096 \\ -0.190 & 0.002 & 0.188 \\ 0.249 & 0.114 & -0.362 \end{bmatrix}
+$$
 
-```
-db = [(-0.616 + 0.237)/2, (0.285 + 0.462)/2, (0.331 - 0.699)/2]
-   = [-0.190, 0.374, -0.184]
-```
+**Step 3: Compute $db = \text{mean}(P - Y, \text{axis}=0)$**
+
+$$
+db = \left[\frac{-0.616 + 0.237}{2},\; \frac{0.285 + 0.462}{2},\; \frac{0.331 - 0.699}{2}\right] = [-0.190,\; 0.374,\; -0.184]
+$$
 
 **Step 4: Update Parameters**
 
-With learning_rate = 0.1:
-```
-W_new = W - 0.1 * dW
-b_new = b - 0.1 * db
-```
+With learning rate $\alpha = 0.1$:
+
+$$
+W_{\text{new}} = W - \alpha \cdot dW
+$$
+
+$$
+b_{\text{new}} = b - \alpha \cdot db
+$$
 
 ---
 
@@ -505,10 +490,14 @@ b_new = b - 0.1 * db
 ### The Forward Pass
 
 **Math:**
-```
+
+$$
 Z = XW + b
-P = softmax(Z)
-```
+$$
+
+$$
+P = \text{softmax}(Z)
+$$
 
 **Code:**
 ```python
@@ -522,10 +511,14 @@ def forward(self, X: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
 ### The Backward Pass
 
 **Math:**
-```
-dL/dW = (1/n) * X^T @ (P - Y)
-dL/db = (1/n) * sum_rows(P - Y)
-```
+
+$$
+\frac{\partial L}{\partial W} = \frac{1}{n} X^\top (P - Y)
+$$
+
+$$
+\frac{\partial L}{\partial b} = \frac{1}{n} \sum_{\text{rows}} (P - Y)
+$$
 
 **Code:**
 ```python
@@ -576,36 +569,36 @@ The `keepdims=True` maintains the shape for proper broadcasting.
 
 | Operation | Complexity | Why |
 |-----------|------------|-----|
-| Forward (Z = XW + b) | O(n * d * K) | Matrix multiplication |
-| Softmax | O(n * K) | Three passes: max, exp, sum (per row) |
-| Cross-entropy | O(n * K) | Element-wise multiply and sum |
-| Backward (dW) | O(n * d * K) | Matrix multiplication X^T @ error |
-| Backward (db) | O(n * K) | Sum over samples |
+| Forward ($Z = XW + b$) | $O(n \cdot d \cdot K)$ | Matrix multiplication |
+| Softmax | $O(n \cdot K)$ | Three passes: max, exp, sum (per row) |
+| Cross-entropy | $O(n \cdot K)$ | Element-wise multiply and sum |
+| Backward ($dW$) | $O(n \cdot d \cdot K)$ | Matrix multiplication $X^\top \cdot \text{error}$ |
+| Backward ($db$) | $O(n \cdot K)$ | Sum over samples |
 
-**Total per iteration:** O(n * d * K)
+**Total per iteration:** $O(n \cdot d \cdot K)$
 
-The matrix multiplications dominate. For large vocabulary (K = 50,000 in LLMs), this becomes expensive.
+The matrix multiplications dominate. For large vocabulary ($K = 50{,}000$ in LLMs), this becomes expensive.
 
 ### Space Complexity
 
 | What | Size | Why |
 |------|------|-----|
-| Weights W | O(d * K) | Stored for inference and training |
-| Bias b | O(K) | One per class |
-| Logits Z | O(n * K) | Intermediate (can be computed on-the-fly) |
-| Probabilities P | O(n * K) | Needed for loss and gradients |
-| One-hot Y | O(n * K) | Can use sparse representation |
+| Weights $W$ | $O(d \cdot K)$ | Stored for inference and training |
+| Bias $b$ | $O(K)$ | One per class |
+| Logits $Z$ | $O(n \cdot K)$ | Intermediate (can be computed on-the-fly) |
+| Probabilities $P$ | $O(n \cdot K)$ | Needed for loss and gradients |
+| One-hot $Y$ | $O(n \cdot K)$ | Can use sparse representation |
 
 **For a language model with 50K vocabulary and batch size 1024:**
-- P alone is 1024 * 50,000 * 4 bytes = 200 MB (in float32)
+- $P$ alone is $1024 \times 50{,}000 \times 4$ bytes $= 200$ MB (in float32)
 - This is why LLMs often use mixed precision
 
 ### The Bottleneck
 
 The softmax computation itself is **memory-bound**, not compute-bound:
-1. Read all K logits to find max
-2. Read all K logits again to compute exp and sum
-3. Read all K values again to normalize
+1. Read all $K$ logits to find max
+2. Read all $K$ logits again to compute exp and sum
+3. Read all $K$ values again to normalize
 
 Three passes over the data! This is why fused softmax kernels that do everything in one pass are so valuable.
 
@@ -622,7 +615,7 @@ def softmax_wrong(z):
     return exp_z / np.sum(exp_z)
 ```
 
-**Why it's wrong:** `exp(1000) = inf`, leading to `inf/inf = NaN`.
+**Why it's wrong:** $e^{1000} = \infty$, leading to $\infty / \infty = \text{NaN}$.
 
 **The fix:**
 ```python
@@ -660,7 +653,7 @@ def cross_entropy_wrong(P, Y):
     return -np.mean(np.sum(Y * np.log(P), axis=1))
 ```
 
-**Why it's wrong:** If the model is very confident but wrong, P for the correct class might be ~0, and `log(0) = -inf`.
+**Why it's wrong:** If the model is very confident but wrong, $P$ for the correct class might be $\approx 0$, and $\log(0) = -\infty$.
 
 **The fix:**
 ```python
@@ -739,8 +732,8 @@ For GPT-3 with 50,257 vocabulary tokens, this softmax runs over 50K+ values for 
 ### Why Softmax is a Bottleneck
 
 In transformers, softmax appears:
-1. **In every attention head** — O(seq_length^2) operations for self-attention
-2. **In the output layer** — O(vocab_size) operations per token
+1. **In every attention head** — $O(\text{seq\_length}^2)$ operations for self-attention
+2. **In the output layer** — $O(\text{vocab\_size})$ operations per token
 
 For long sequences, the attention softmax is quadratic in sequence length. This is the main motivation for efficient attention methods like Flash Attention.
 
@@ -760,15 +753,15 @@ def softmax_with_temperature(z, temperature=1.0):
 
 ### The Effect
 
-Consider z = [2, 1, 0]:
+Consider $z = [2, 1, 0]$:
 
 | Temperature | Softmax Output | Character |
 |-------------|----------------|-----------|
-| T = 0.5 | [0.84, 0.11, 0.05] | Sharp (confident) |
-| T = 1.0 | [0.67, 0.24, 0.09] | Normal |
-| T = 2.0 | [0.51, 0.31, 0.18] | Soft (uncertain) |
-| T -> 0 | [1.0, 0.0, 0.0] | Argmax (one-hot) |
-| T -> inf | [0.33, 0.33, 0.33] | Uniform |
+| $T = 0.5$ | $[0.84, 0.11, 0.05]$ | Sharp (confident) |
+| $T = 1.0$ | $[0.67, 0.24, 0.09]$ | Normal |
+| $T = 2.0$ | $[0.51, 0.31, 0.18]$ | Soft (uncertain) |
+| $T \to 0$ | $[1.0, 0.0, 0.0]$ | Argmax (one-hot) |
+| $T \to \infty$ | $[0.33, 0.33, 0.33]$ | Uniform |
 
 ```
 Temperature Effect on Distribution:
@@ -784,23 +777,22 @@ ____|   | |_         ___|   |   | | |___   ____|_|   | |____
 
 ### Mathematical Intuition
 
-Dividing logits by T is equivalent to raising probabilities to the power 1/T:
+Dividing logits by $T$ is equivalent to raising probabilities to the power $1/T$:
 
-```
-softmax(z/T)_i = exp(z_i/T) / sum_j exp(z_j/T)
-              proportional to [softmax(z)_i]^(1/T)
-```
+$$
+\text{softmax}(z/T)_i = \frac{e^{z_i / T}}{\sum_j e^{z_j / T}} \propto \bigl[\text{softmax}(z)_i\bigr]^{1/T}
+$$
 
-- T < 1: Sharpens the distribution (raises probabilities to power > 1)
-- T > 1: Flattens the distribution (raises probabilities to power < 1)
+- $T < 1$: Sharpens the distribution (raises probabilities to power $> 1$)
+- $T > 1$: Flattens the distribution (raises probabilities to power $< 1$)
 
 ### Use in LLM Inference
 
 Temperature is the primary creativity control:
-- **T = 0** (or very small): Deterministic, always picks most likely token
-- **T = 0.7**: Good balance for coherent but varied text
-- **T = 1.0**: Sample from the model's actual distribution
-- **T > 1.0**: More random, creative, but potentially incoherent
+- **$T = 0$** (or very small): Deterministic, always picks most likely token
+- **$T = 0.7$**: Good balance for coherent but varied text
+- **$T = 1.0$**: Sample from the model's actual distribution
+- **$T > 1.0$**: More random, creative, but potentially incoherent
 
 ```python
 # Typical LLM sampling
@@ -816,25 +808,25 @@ next_token = np.random.choice(vocab_size, p=probs)
 
 ### Quick Checks
 
-1. **Why can't we use z/sum(z) instead of softmax?**
+1. **Why can't we use $z / \sum(z)$ instead of softmax?**
    - Negative logits would give negative "probabilities"
-   - We need exp() to guarantee positivity
+   - We need $\exp(\cdot)$ to guarantee positivity
 
 2. **Why subtract the max instead of, say, the mean?**
    - The max gives the tightest bound on the largest exponent
    - Subtracting the mean could still leave large positive values that overflow
 
-3. **What shape is the softmax Jacobian for a single sample with K classes?**
-   - (K, K) — derivatives of K outputs with respect to K inputs
+3. **What shape is the softmax Jacobian for a single sample with $K$ classes?**
+   - $(K, K)$ — derivatives of $K$ outputs with respect to $K$ inputs
 
 4. **Why is the gradient of softmax + cross-entropy simpler than the product of their individual gradients?**
-   - Cancellation: the 1/p term from cross-entropy gradient cancels with the p term from softmax Jacobian
+   - Cancellation: the $1/p$ term from cross-entropy gradient cancels with the $p$ term from softmax Jacobian
 
 ### Exercises
 
 1. **Easy**: Implement softmax for 3D input (batch, sequence, classes). Handle the axis correctly.
 
-2. **Medium**: Implement temperature scaling and verify that T->0 gives argmax behavior.
+2. **Medium**: Implement temperature scaling and verify that $T \to 0$ gives argmax behavior.
 
 3. **Hard**: Implement the "online softmax" algorithm that computes softmax in a single pass (used in Flash Attention).
 
@@ -844,13 +836,13 @@ next_token = np.random.choice(vocab_size, p=probs)
 
 ### Key Takeaways
 
-- **Softmax converts logits to probabilities** using exponentiation and normalization, mapping R^K to the probability simplex
+- **Softmax converts logits to probabilities** using exponentiation and normalization, mapping $\mathbb{R}^K$ to the probability simplex
 
 - **The subtract-max trick is essential** for numerical stability, preventing both overflow and underflow without changing the result
 
 - **Cross-entropy loss measures prediction quality** as negative log probability of the correct class, with information-theoretic roots
 
-- **The gradient P - Y is beautifully simple** because softmax and cross-entropy are naturally paired from the exponential family
+- **The gradient $P - Y$ is beautifully simple** because softmax and cross-entropy are naturally paired from the exponential family
 
 - **Softmax appears everywhere in transformers** — in attention weights and output layers, making it a critical operation for inference optimization
 

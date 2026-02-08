@@ -6,23 +6,23 @@
 
 Imagine you stack ten linear transformations:
 
-```
-y = W_10 * (W_9 * (... (W_1 * x + b_1) ...) + b_9) + b_10
-```
+$$
+y = W_{10} (W_9 (\ldots (W_1 x + b_1) \ldots) + b_9) + b_{10}
+$$
 
 No matter how many layers you stack, the entire thing collapses into a single matrix multiply:
 
-```
-y = W' * x + b'
-```
+$$
+y = W' x + b'
+$$
 
-where `W' = W_10 * W_9 * ... * W_1` and `b'` is some combined bias. Ten layers, a hundred layers, a thousand -- they all produce the same expressive power as one layer. Your deep network is a fraud. It can only learn lines, planes, and hyperplanes.
+where $W' = W_{10} W_9 \cdots W_1$ and $b'$ is some combined bias. Ten layers, a hundred layers, a thousand -- they all produce the same expressive power as one layer. Your deep network is a fraud. It can only learn lines, planes, and hyperplanes.
 
 This is the fundamental crisis that activation functions solve. By inserting a nonlinear function between every linear layer, you break the collapse. Each layer can now bend, twist, and fold the input space in ways that a linear transformation cannot. Stack enough of these nonlinear layers, and you get a **universal approximator** -- a network that can approximate any continuous function to arbitrary precision.
 
 ### The Key Insight
 
-An activation function is deceptively simple: it is an element-wise operation applied independently to every number in a tensor. No matrix multiplies, no dot products, no interactions between elements. Just `f(x)` applied to each scalar. Yet this tiny per-element nonlinearity is the difference between a network that can only draw straight lines and one that can learn to recognize faces, translate languages, or generate code.
+An activation function is deceptively simple: it is an element-wise operation applied independently to every number in a tensor. No matrix multiplies, no dot products, no interactions between elements. Just $f(x)$ applied to each scalar. Yet this tiny per-element nonlinearity is the difference between a network that can only draw straight lines and one that can learn to recognize faces, translate languages, or generate code.
 
 ### Real-World Analogy
 
@@ -48,7 +48,7 @@ Sigmoid/Tanh  --> ReLU/LeakyReLU --> GELU/SiLU
                                          self-gating
 ```
 
-**Sigmoid era (1990s-2012):** Sigmoid and tanh were the standard activations. They worked for shallow networks but catastrophically failed in deep ones. The gradient of sigmoid is at most 0.25 (at x=0) and quickly approaches 0 for large |x|. Chain ten of these together via backpropagation and the gradient shrinks by a factor of ~0.25^10 = 9.5e-7. The weights in early layers barely update. This is the **vanishing gradient problem**, and it limited practical networks to a few layers for decades.
+**Sigmoid era (1990s-2012):** Sigmoid and tanh were the standard activations. They worked for shallow networks but catastrophically failed in deep ones. The gradient of sigmoid is at most 0.25 (at $x = 0$) and quickly approaches 0 for large $|x|$. Chain ten of these together via backpropagation and the gradient shrinks by a factor of $\sim 0.25^{10} = 9.5 \times 10^{-7}$. The weights in early layers barely update. This is the **vanishing gradient problem**, and it limited practical networks to a few layers for decades.
 
 **ReLU revolution (2012-2017):** ReLU's gradient is either 0 or 1 -- never a fractional value that causes shrinkage. For positive inputs, gradients flow through unchanged no matter how deep the network. This single property unlocked the training of deep networks (AlexNet, VGG, ResNet) and launched the modern deep learning era. But ReLU introduced a new problem: **dying neurons**. If a neuron's input is always negative (perhaps from an unlucky weight initialization or a too-large learning rate), its gradient is permanently zero and it never recovers.
 
@@ -63,17 +63,18 @@ Sigmoid/Tanh  --> ReLU/LeakyReLU --> GELU/SiLU
 The simplest idea that could possibly work: keep positive values, zero out negative ones.
 
 **Forward:**
-```
-ReLU(x) = max(0, x)
-```
+
+$$
+\text{ReLU}(x) = \max(0, x)
+$$
 
 **Backward:**
-```
-ReLU'(x) = 1   if x > 0
-            0   if x <= 0
-```
 
-At x = 0, the derivative is technically undefined (it is a corner). By convention, we use 0 (the subgradient).
+$$
+\text{ReLU}'(x) = \begin{cases} 1 & \text{if } x > 0 \\ 0 & \text{if } x \leq 0 \end{cases}
+$$
+
+At $x = 0$, the derivative is technically undefined (it is a corner). By convention, we use 0 (the subgradient).
 
 ### Worked Example
 
@@ -117,7 +118,7 @@ class ReLU(Activation):
 **Line-by-line:**
 - `x.copy()`: Critical. We cache a copy of the input so that if the caller mutates their array after calling `forward`, our cached values are unaffected. The test `TestCacheIndependence` specifically verifies this.
 - `np.maximum(0.0, x)`: Element-wise maximum. This is NOT `np.max()` (which finds the single largest element). `np.maximum` compares element-wise against 0.0.
-- `(x > 0).astype(np.float64)`: Creates a boolean mask (True where x > 0, False elsewhere), then casts to float (1.0 or 0.0). Note that `x > 0` is False at x = 0, giving us the gradient = 0 convention.
+- `(x > 0).astype(np.float64)`: Creates a boolean mask (True where $x > 0$, False elsewhere), then casts to float (1.0 or 0.0). Note that `x > 0` is False at $x = 0$, giving us the gradient = 0 convention.
 - `grad_output * ...`: Element-wise multiplication applies the chain rule. Each position's incoming gradient is either passed through (multiplied by 1) or blocked (multiplied by 0).
 
 ### The Dying ReLU Problem
@@ -144,19 +145,19 @@ Once a neuron dies, it cannot recover because zero gradient means zero weight up
 
 ### The Math
 
-Instead of zeroing out negative values, scale them by a small constant alpha (typically 0.01).
+Instead of zeroing out negative values, scale them by a small constant $\alpha$ (typically 0.01).
 
 **Forward:**
-```
-LeakyReLU(x) = x         if x > 0
-               alpha * x  if x <= 0
-```
+
+$$
+\text{LeakyReLU}(x) = \begin{cases} x & \text{if } x > 0 \\ \alpha x & \text{if } x \leq 0 \end{cases}
+$$
 
 **Backward:**
-```
-LeakyReLU'(x) = 1      if x > 0
-                alpha   if x <= 0
-```
+
+$$
+\text{LeakyReLU}'(x) = \begin{cases} 1 & \text{if } x > 0 \\ \alpha & \text{if } x \leq 0 \end{cases}
+$$
 
 ### Worked Example
 
@@ -203,8 +204,8 @@ class LeakyReLU(Activation):
 
 **Key observations:**
 - `np.where(x > 0, x, self.alpha * x)`: This is a vectorized if/else. Where the condition is True, pick from the second argument; where False, pick from the third.
-- The `alpha` parameter is configurable. The tests verify two special cases: `alpha=0` degenerates to standard ReLU, and `alpha=1` becomes the identity function (`f(x) = x` everywhere). These are useful sanity checks.
-- Unlike ReLU, the gradient at x = 0 is `alpha` (not zero), which means every neuron always receives some gradient signal. The test `test_leaky_relu_survives` confirms non-zero gradients for all-negative inputs.
+- The $\alpha$ parameter is configurable. The tests verify two special cases: $\alpha = 0$ degenerates to standard ReLU, and $\alpha = 1$ becomes the identity function ($f(x) = x$ everywhere). These are useful sanity checks.
+- Unlike ReLU, the gradient at $x = 0$ is $\alpha$ (not zero), which means every neuron always receives some gradient signal. The test `test_leaky_relu_survives` confirms non-zero gradients for all-negative inputs.
 
 ---
 
@@ -212,26 +213,27 @@ class LeakyReLU(Activation):
 
 ### The Math
 
-Maps any real number to the range (0, 1). Used for centuries in statistics (as the logistic function), and the original neural network activation.
+Maps any real number to the range $(0, 1)$. Used for centuries in statistics (as the logistic function), and the original neural network activation.
 
 **Forward:**
-```
-sigmoid(x) = 1 / (1 + exp(-x))
-```
+
+$$
+\sigma(x) = \frac{1}{1 + e^{-x}}
+$$
 
 **Backward:**
-```
-sigmoid'(x) = sigmoid(x) * (1 - sigmoid(x))
-            = s * (1 - s)
-```
 
-The derivative has an elegant form: it only depends on the output `s`, not the original input `x`. This means we can cache the forward output and reuse it in backward without recomputing the expensive exponential.
+$$
+\sigma'(x) = \sigma(x) \cdot (1 - \sigma(x)) = s(1 - s)
+$$
+
+The derivative has an elegant form: it only depends on the output $s$, not the original input $x$. This means we can cache the forward output and reuse it in backward without recomputing the expensive exponential.
 
 ### Numerical Stability
 
-The naive formula `1 / (1 + exp(-x))` fails for large negative x. When x = -1000, `exp(-(-1000)) = exp(1000)` overflows to infinity, producing `1 / inf = NaN` or `0/0`.
+The naive formula $\frac{1}{1 + e^{-x}}$ fails for large negative $x$. When $x = -1000$, $e^{-(-1000)} = e^{1000}$ overflows to infinity, producing $\frac{1}{\infty}$ = NaN or $\frac{0}{0}$.
 
-The fix is to branch on the sign of x:
+The fix is to branch on the sign of $x$:
 
 ```python
 def _stable_sigmoid(x: np.ndarray) -> np.ndarray:
@@ -245,12 +247,15 @@ def _stable_sigmoid(x: np.ndarray) -> np.ndarray:
     return result
 ```
 
-**Why this works:** For x >= 0, we compute `exp(-x)` which is in (0, 1] -- safe. For x < 0, we compute `exp(x)` which is also in (0, 1) -- safe. We never compute an exponential of a large positive number.
+**Why this works:** For $x \geq 0$, we compute $e^{-x}$ which is in $(0, 1]$ -- safe. For $x < 0$, we compute $e^x$ which is also in $(0, 1)$ -- safe. We never compute an exponential of a large positive number.
 
 The two formulas are mathematically identical:
-```
-1 / (1 + exp(-x)) = exp(x) / (exp(x) + 1)     [multiply top and bottom by exp(x)]
-```
+
+$$
+\frac{1}{1 + e^{-x}} = \frac{e^x}{e^x + 1}
+$$
+
+(multiply top and bottom by $e^x$).
 
 ### Worked Example
 
@@ -282,7 +287,7 @@ Backward (with grad_output = [1, 1, 1]):
 Grad input:  [0.1050, 0.2500, 0.1050]
 ```
 
-Notice the gradient peaks at 0.25 when x = 0 and quickly shrinks. At x = 10, sigmoid(10) = 0.99995, and the gradient is 0.99995 * 0.00005 = 0.0000045. This is the vanishing gradient problem. The test `test_sigmoid_gradient_shrinks` verifies that the gradient monotonically decreases as |x| increases.
+Notice the gradient peaks at 0.25 when $x = 0$ and quickly shrinks. At $x = 10$, $\sigma(10) = 0.99995$, and the gradient is $0.99995 \times 0.00005 = 0.0000045$. This is the vanishing gradient problem. The test `test_sigmoid_gradient_shrinks` verifies that the gradient monotonically decreases as $|x|$ increases.
 
 ### The Vanishing Gradient Problem Visualized
 
@@ -299,12 +304,12 @@ Notice the gradient peaks at 0.25 when x = 0 and quickly shrinks. At x = 10, sig
   for large |x|                    Chain 10 layers: 0.25^10 ~ 10^-6
 ```
 
-When you backpropagate through many sigmoid layers, these tiny gradients multiply together. After 10 layers, the gradient reaching the first layer is roughly 0.25^10 ~ one millionth of the output gradient. The early layers learn almost nothing. This is why sigmoid is no longer used in hidden layers of deep networks.
+When you backpropagate through many sigmoid layers, these tiny gradients multiply together. After 10 layers, the gradient reaching the first layer is roughly $0.25^{10} \approx 10^{-6}$ of the output gradient. The early layers learn almost nothing. This is why sigmoid is no longer used in hidden layers of deep networks.
 
 ### Where Sigmoid Is Still Used
 
 Despite its flaws in hidden layers, sigmoid remains essential:
-1. **Output layer for binary classification** -- maps logits to probabilities in (0, 1)
+1. **Output layer for binary classification** -- maps logits to probabilities in $(0, 1)$
 2. **Gating mechanisms** -- in LSTMs, GRUs, and as a building block for SiLU
 3. **Attention masks** -- converting raw scores to probabilities
 
@@ -315,16 +320,18 @@ Despite its flaws in hidden layers, sigmoid remains essential:
 ### The Math
 
 **Forward:**
-```
-tanh(x) = (exp(x) - exp(-x)) / (exp(x) + exp(-x))
-```
 
-Equivalently: `tanh(x) = 2 * sigmoid(2x) - 1`
+$$
+\tanh(x) = \frac{e^x - e^{-x}}{e^x + e^{-x}}
+$$
+
+Equivalently: $\tanh(x) = 2\sigma(2x) - 1$
 
 **Backward:**
-```
-tanh'(x) = 1 - tanh(x)^2 = 1 - t^2
-```
+
+$$
+\tanh'(x) = 1 - \tanh^2(x) = 1 - t^2
+$$
 
 Like sigmoid, the derivative depends only on the output, so we cache it.
 
@@ -355,7 +362,7 @@ Backward (with grad_output = [1, 1, 1]):
 Grad input:  [0.4200, 1.0000, 0.4200]
 ```
 
-**Comparison with sigmoid:** Tanh's gradient peaks at 1.0 (vs sigmoid's 0.25), giving 4x stronger gradients near zero. It is also zero-centered, which means its outputs have a mean near zero -- helpful because the next layer receives inputs that are not systematically biased positive. However, tanh still saturates for large |x| and still causes vanishing gradients in deep networks.
+**Comparison with sigmoid:** Tanh's gradient peaks at 1.0 (vs sigmoid's 0.25), giving 4x stronger gradients near zero. It is also zero-centered, which means its outputs have a mean near zero -- helpful because the next layer receives inputs that are not systematically biased positive. However, tanh still saturates for large $|x|$ and still causes vanishing gradients in deep networks.
 
 ### Implementation
 
@@ -381,16 +388,16 @@ The implementation uses `np.tanh()` directly, which handles numerical stability 
 
 ### The Key Insight
 
-GELU asks a question: "If x were a draw from a standard Gaussian distribution, how likely is it to be positive?" Then it scales x by that probability.
+GELU asks a question: "If $x$ were a draw from a standard Gaussian distribution, how likely is it to be positive?" Then it scales $x$ by that probability.
 
-```
-GELU(x) = x * Phi(x)
-```
+$$
+\text{GELU}(x) = x \cdot \Phi(x)
+$$
 
-where `Phi(x) = P(X <= x)` for X ~ N(0, 1) -- the Gaussian CDF.
+where $\Phi(x) = P(X \leq x)$ for $X \sim \mathcal{N}(0, 1)$ -- the Gaussian CDF.
 
-- For large positive x: Phi(x) is near 1, so GELU(x) is near x (pass through)
-- For large negative x: Phi(x) is near 0, so GELU(x) is near 0 (suppress)
+- For large positive $x$: $\Phi(x) \approx 1$, so $\text{GELU}(x) \approx x$ (pass through)
+- For large negative $x$: $\Phi(x) \approx 0$, so $\text{GELU}(x) \approx 0$ (suppress)
 - Near zero: smooth, gradual transition
 
 This is a probabilistic, smooth version of ReLU. Where ReLU makes a hard binary decision at zero, GELU makes a soft probabilistic one.
@@ -398,36 +405,44 @@ This is a probabilistic, smooth version of ReLU. Where ReLU makes a hard binary 
 ### The Math
 
 **Exact forward (erf-based):**
-```
-GELU(x) = x * Phi(x)
-         = x * 0.5 * (1 + erf(x / sqrt(2)))
-```
+
+$$
+\text{GELU}(x) = x \cdot \Phi(x) = x \cdot \frac{1}{2}\left(1 + \text{erf}\!\left(\frac{x}{\sqrt{2}}\right)\right)
+$$
 
 **Tanh approximation (commonly used):**
-```
-c = sqrt(2/pi) ~ 0.7978845608
 
-inner = c * (x + 0.044715 * x^3)
-GELU(x) ~ 0.5 * x * (1 + tanh(inner))
-```
+$$
+c = \sqrt{\frac{2}{\pi}} \approx 0.7978845608
+$$
+
+$$
+\text{inner} = c \cdot \left(x + 0.044715 \, x^3\right)
+$$
+
+$$
+\text{GELU}(x) \approx 0.5 \, x \left(1 + \tanh(\text{inner})\right)
+$$
 
 **Exact backward:**
-```
-GELU'(x) = Phi(x) + x * phi(x)
 
-where phi(x) = (1/sqrt(2*pi)) * exp(-x^2/2)  is the Gaussian PDF
-```
+$$
+\text{GELU}'(x) = \Phi(x) + x \cdot \phi(x)
+$$
+
+where $\phi(x) = \frac{1}{\sqrt{2\pi}} e^{-x^2/2}$ is the Gaussian PDF.
 
 **Tanh approximation backward:**
-```
-Let inner = c * (x + 0.044715 * x^3)
-Let t = tanh(inner)
 
-d(inner)/dx = c * (1 + 3 * 0.044715 * x^2)
-            = c * (1 + 0.134145 * x^2)
+Let $\text{inner} = c \cdot (x + 0.044715 \, x^3)$ and $t = \tanh(\text{inner})$.
 
-GELU'(x) = 0.5 * (1 + t) + 0.5 * x * (1 - t^2) * d(inner)/dx
-```
+$$
+\frac{d(\text{inner})}{dx} = c \cdot (1 + 3 \cdot 0.044715 \, x^2) = c \cdot (1 + 0.134145 \, x^2)
+$$
+
+$$
+\text{GELU}'(x) = 0.5(1 + t) + 0.5 \, x \, (1 - t^2) \cdot \frac{d(\text{inner})}{dx}
+$$
 
 ### Worked Example (Tanh Approximation)
 
@@ -465,7 +480,7 @@ GELU(1.0) = 0.5 * 1.0 * (1 + 0.6837)
 Output:      [-0.1582, 0.0, 0.8419]
 ```
 
-Notice the **asymmetry**: GELU(-1) = -0.1582 but GELU(1) = 0.8419. Negative inputs are strongly suppressed but not completely zeroed. The small negative dip at x ~ -0.17 gives GELU its characteristic non-monotonic shape.
+Notice the **asymmetry**: $\text{GELU}(-1) = -0.1582$ but $\text{GELU}(1) = 0.8419$. Negative inputs are strongly suppressed but not completely zeroed. The small negative dip at $x \approx -0.17$ gives GELU its characteristic non-monotonic shape.
 
 ### Backward Worked Example (Tanh Approximation)
 
@@ -492,7 +507,7 @@ For x = 0.0:
              = 0.5
 ```
 
-The gradient at x = 0 is 0.5 -- significantly stronger than sigmoid's 0.25. And unlike ReLU, the gradient transitions smoothly through zero rather than having a discontinuity.
+The gradient at $x = 0$ is 0.5 -- significantly stronger than sigmoid's 0.25. And unlike ReLU, the gradient transitions smoothly through zero rather than having a discontinuity.
 
 ### Implementation Walkthrough
 
@@ -539,11 +554,11 @@ class GELU(Activation):
 
 - **`_erf` wrapper:** NumPy does not expose a vectorized erf function directly. The implementation uses `np.vectorize(math.erf)` to create one. This is slower than a native vectorized implementation but mathematically correct. In production, you would use `scipy.special.erf` or a CUDA intrinsic.
 
-- **Why cache `t` but not `inner`?** The backward pass needs `t` (to compute `sech^2 = 1 - t^2`) and `x` (to compute `d_inner`). It does NOT need `inner` itself because tanh's derivative is expressed purely in terms of tanh's output. This is the same pattern as the standalone Tanh class.
+- **Why cache $t$ but not inner?** The backward pass needs $t$ (to compute $\text{sech}^2 = 1 - t^2$) and $x$ (to compute $\frac{d(\text{inner})}{dx}$). It does NOT need inner itself because tanh's derivative is expressed purely in terms of tanh's output. This is the same pattern as the standalone Tanh class.
 
-- **`0.5 * (1.0 + t) + 0.5 * x * sech2 * d_inner`:** This is the product rule applied to `GELU(x) = 0.5 * x * (1 + t)`. The first term `0.5 * (1 + t)` is the derivative of the `0.5 * x` part (holding `(1+t)` constant). The second term is the derivative of `0.5 * (1 + t)` part (holding `x` constant), expanded through tanh's chain rule.
+- **`0.5 * (1.0 + t) + 0.5 * x * sech2 * d_inner`:** This is the product rule applied to $\text{GELU}(x) = 0.5 \cdot x \cdot (1 + t)$. The first term $0.5(1 + t)$ is the derivative of the $0.5x$ part (holding $(1+t)$ constant). The second term is the derivative of the $0.5(1 + t)$ part (holding $x$ constant), expanded through tanh's chain rule.
 
-- **Approximation accuracy:** The test `test_approx_vs_exact` verifies that the tanh approximation stays within 0.005 of exact GELU across [-10, 10]. The constant 0.044715 in the cubic term was fit to minimize this error.
+- **Approximation accuracy:** The test `test_approx_vs_exact` verifies that the tanh approximation stays within 0.005 of exact GELU across $[-10, 10]$. The constant 0.044715 in the cubic term was fit to minimize this error.
 
 ### Why GPT and BERT Use GELU
 
@@ -557,29 +572,29 @@ GELU's non-monotonic shape creates a richer loss landscape than ReLU. The small 
 
 SiLU is beautifully simple: the input gates itself.
 
-```
-SiLU(x) = x * sigmoid(x)
-```
+$$
+\text{SiLU}(x) = x \cdot \sigma(x)
+$$
 
-The sigmoid of x acts as a gate that controls how much of x passes through. For large positive x, sigmoid(x) ~ 1, so the full value passes. For large negative x, sigmoid(x) ~ 0, so the value is suppressed. But unlike ReLU, the transition is smooth and the gate is learned implicitly from the data.
+The sigmoid of $x$ acts as a gate that controls how much of $x$ passes through. For large positive $x$, $\sigma(x) \approx 1$, so the full value passes. For large negative $x$, $\sigma(x) \approx 0$, so the value is suppressed. But unlike ReLU, the transition is smooth and the gate is learned implicitly from the data.
 
 ### The Math
 
 **Forward:**
-```
-SiLU(x) = x * sigmoid(x)
-```
+
+$$
+\text{SiLU}(x) = x \cdot \sigma(x)
+$$
 
 **Backward:**
-```
-Let s = sigmoid(x)
 
-SiLU'(x) = s + x * s * (1 - s)
-          = s * (1 + x * (1 - s))
-          = s * (1 + x - x * s)
-```
+Let $s = \sigma(x)$.
 
-This is the product rule: `d/dx [x * s] = s + x * ds/dx = s + x * s * (1-s)`.
+$$
+\text{SiLU}'(x) = s + x \cdot s \cdot (1 - s) = s(1 + x(1 - s)) = s(1 + x - xs)
+$$
+
+This is the product rule: $\frac{d}{dx}[x \cdot s] = s + x \cdot \frac{ds}{dx} = s + x \cdot s(1-s)$.
 
 ### Worked Example
 
@@ -621,7 +636,7 @@ Backward (with grad_output = [1, 1, 1]):
 Grad input:  [-0.0908, 0.5, 0.9277]
 ```
 
-Key observation: at x = -2.0, the gradient is -0.0908. It is **negative**, meaning the function is still decreasing at that point. This is the non-monotonic behavior -- SiLU dips below zero before approaching zero from below. The minimum of SiLU is approximately -0.278 at x ~ -1.28.
+Key observation: at $x = -2.0$, the gradient is $-0.0908$. It is **negative**, meaning the function is still decreasing at that point. This is the non-monotonic behavior -- SiLU dips below zero before approaching zero from below. The minimum of SiLU is approximately $-0.278$ at $x \approx -1.28$.
 
 ### Implementation Walkthrough
 
@@ -642,7 +657,7 @@ class SiLU(Activation):
 ```
 
 **Key observations:**
-- SiLU caches both `x` and `s = sigmoid(x)`. The backward needs both.
+- SiLU caches both $x$ and $s = \sigma(x)$. The backward needs both.
 - `_stable_sigmoid` is reused from the top-level function, ensuring consistent numerical stability.
 - The `Swish = SiLU` alias at module level makes the two names interchangeable. The test `test_swish_alias` verifies `Swish is SiLU` (identity, not just equality).
 
@@ -750,7 +765,7 @@ def gradient_check(activation, x, h=1e-5):
             "passed": max_rel_error < 1e-5}
 ```
 
-This uses **central finite differences**: `f'(x) ~ (f(x+h) - f(x-h)) / (2h)`. This is O(h^2) accurate, much better than the forward difference `(f(x+h) - f(x)) / h` which is only O(h) accurate.
+This uses **central finite differences**: $f'(x) \approx \frac{f(x+h) - f(x-h)}{2h}$. This is $O(h^2)$ accurate, much better than the forward difference $\frac{f(x+h) - f(x)}{h}$ which is only $O(h)$ accurate.
 
 **Why iterate element by element?** For element-wise activations, this is technically unnecessary since each output depends only on the corresponding input. But the `np.nditer` approach is general -- it works for any function, including future implementations where outputs depend on multiple inputs.
 
@@ -760,7 +775,7 @@ This uses **central finite differences**: `f'(x) ~ (f(x+h) - f(x-h)) / (2h)`. Th
 
 ## Gradient Flow Comparison
 
-This is where the practical impact of activation choice becomes visible. Consider the gradient magnitude as a function of x for each activation:
+This is where the practical impact of activation choice becomes visible. Consider the gradient magnitude as a function of $x$ for each activation:
 
 ```
 Gradient Magnitude vs. Input Value
@@ -825,18 +840,20 @@ SiLU:
 
 **What to notice:**
 - ReLU has a hard discontinuity at zero. Left of zero: nothing. Right of zero: everything.
-- Sigmoid and Tanh vanish for large |x|. Sigmoid's max gradient (0.25) is four times weaker than Tanh's (1.0).
-- GELU and SiLU have gradients that slightly exceed 1.0 for moderate positive x, then settle toward 1.0 for large x. They never go to zero for finite inputs. Their non-monotonic dip in the negative region provides gradient signal even for slightly negative inputs.
+- Sigmoid and Tanh vanish for large $|x|$. Sigmoid's max gradient (0.25) is four times weaker than Tanh's (1.0).
+- GELU and SiLU have gradients that slightly exceed 1.0 for moderate positive $x$, then settle toward 1.0 for large $x$. They never go to zero for finite inputs. Their non-monotonic dip in the negative region provides gradient signal even for slightly negative inputs.
 
 ### Gradient Flow Through Multiple Layers
 
-The real impact shows when you chain layers. After L layers, the gradient reaching the first layer is roughly:
+The real impact shows when you chain layers. After $L$ layers, the gradient reaching the first layer is roughly:
+
+$$
+\text{grad}_1 \approx \prod_{i=1}^{L} f'(x_i)
+$$
+
+(product of local gradients)
 
 ```
-                 L
- grad_1  ~  PI  f'(x_i)    (product of local gradients)
-               i=1
-
 Activation        Gradient range     After 10 layers
 ---------------------------------------------------------
 Sigmoid           (0, 0.25]          Worst case: 0.25^10 ~ 10^-6
@@ -873,13 +890,13 @@ Activation instance
 
 | Activation | Caches | Why |
 |-----------|--------|-----|
-| ReLU | `x` | Need sign of x for backward mask |
-| LeakyReLU | `x` | Need sign of x for backward mask |
-| Sigmoid | `s = sigmoid(x)` | Backward is `s * (1 - s)`, no need for x |
-| Tanh | `t = tanh(x)` | Backward is `1 - t^2`, no need for x |
-| GELU (approx) | `x`, `t = tanh(inner)` | Need both for the product-rule backward |
-| GELU (exact) | `x`, `phi = CDF(x)` | Need both for `phi + x * pdf` |
-| SiLU | `x`, `s = sigmoid(x)` | Need both for `s * (1 + x * (1 - s))` |
+| ReLU | $x$ | Need sign of $x$ for backward mask |
+| LeakyReLU | $x$ | Need sign of $x$ for backward mask |
+| Sigmoid | $s = \sigma(x)$ | Backward is $s(1 - s)$, no need for $x$ |
+| Tanh | $t = \tanh(x)$ | Backward is $1 - t^2$, no need for $x$ |
+| GELU (approx) | $x$, $t = \tanh(\text{inner})$ | Need both for the product-rule backward |
+| GELU (exact) | $x$, $\Phi = \text{CDF}(x)$ | Need both for $\Phi + x \cdot \phi$ |
+| SiLU | $x$, $s = \sigma(x)$ | Need both for $s(1 + x(1 - s))$ |
 
 Sigmoid and Tanh are especially elegant: their backward passes use only the forward output, not the original input. This means they cache less data. In contrast, GELU and SiLU need both the input and an intermediate value, requiring more memory.
 
@@ -891,31 +908,31 @@ Sigmoid and Tanh are especially elegant: their backward passes use only the forw
 
 | Activation | Forward | Backward | Dominant Operation |
 |-----------|---------|----------|--------------------|
-| ReLU | O(n) | O(n) | Comparison + copy |
-| LeakyReLU | O(n) | O(n) | Comparison + multiply |
-| Sigmoid | O(n) | O(n) | exp() per element |
-| Tanh | O(n) | O(n) | exp() per element (inside np.tanh) |
-| GELU (approx) | O(n) | O(n) | tanh() per element (which computes exp) |
-| GELU (exact) | O(n) | O(n) | erf() per element + exp() in backward |
-| SiLU | O(n) | O(n) | exp() per element (inside sigmoid) |
+| ReLU | $O(n)$ | $O(n)$ | Comparison + copy |
+| LeakyReLU | $O(n)$ | $O(n)$ | Comparison + multiply |
+| Sigmoid | $O(n)$ | $O(n)$ | exp() per element |
+| Tanh | $O(n)$ | $O(n)$ | exp() per element (inside np.tanh) |
+| GELU (approx) | $O(n)$ | $O(n)$ | tanh() per element (which computes exp) |
+| GELU (exact) | $O(n)$ | $O(n)$ | erf() per element + exp() in backward |
+| SiLU | $O(n)$ | $O(n)$ | exp() per element (inside sigmoid) |
 
-where n is the total number of elements in the input tensor.
+where $n$ is the total number of elements in the input tensor.
 
-All activations are O(n) because they are element-wise. The constant factor differs significantly: ReLU involves a comparison and conditional copy (extremely cheap), while GELU involves a cubic polynomial, a tanh (which computes two exponentials internally), and several multiplies. In practice, ReLU is roughly 3-5x faster than GELU/SiLU when measured in isolation.
+All activations are $O(n)$ because they are element-wise. The constant factor differs significantly: ReLU involves a comparison and conditional copy (extremely cheap), while GELU involves a cubic polynomial, a tanh (which computes two exponentials internally), and several multiplies. In practice, ReLU is roughly 3-5x faster than GELU/SiLU when measured in isolation.
 
 ### Space Complexity
 
 | Activation | Cache Size | Why |
 |-----------|-----------|-----|
-| ReLU | O(n) | Stores copy of x |
-| LeakyReLU | O(n) | Stores copy of x |
-| Sigmoid | O(n) | Stores s (same size as x) |
-| Tanh | O(n) | Stores t (same size as x) |
-| GELU (approx) | O(2n) | Stores both x and t |
-| GELU (exact) | O(2n) | Stores both x and phi |
-| SiLU | O(2n) | Stores both x and s |
+| ReLU | $O(n)$ | Stores copy of $x$ |
+| LeakyReLU | $O(n)$ | Stores copy of $x$ |
+| Sigmoid | $O(n)$ | Stores $s$ (same size as $x$) |
+| Tanh | $O(n)$ | Stores $t$ (same size as $x$) |
+| GELU (approx) | $O(2n)$ | Stores both $x$ and $t$ |
+| GELU (exact) | $O(2n)$ | Stores both $x$ and $\Phi$ |
+| SiLU | $O(2n)$ | Stores both $x$ and $s$ |
 
-GELU and SiLU use twice the cache memory of simpler activations. For a transformer with hidden dim 4096, batch size 32, and sequence length 2048, that is `32 * 2048 * 4096 * 8 bytes * 2 = 4 GB` of cached activation values per layer (in float64). This is one reason gradient checkpointing exists -- you can discard these caches and recompute them during backward at the cost of extra compute.
+GELU and SiLU use twice the cache memory of simpler activations. For a transformer with hidden dim 4096, batch size 32, and sequence length 2048, that is $32 \times 2048 \times 4096 \times 8 \text{ bytes} \times 2 = 4 \text{ GB}$ of cached activation values per layer (in float64). This is one reason gradient checkpointing exists -- you can discard these caches and recompute them during backward at the cost of extra compute.
 
 ### The Bottleneck
 
@@ -938,7 +955,7 @@ def sigmoid(x):
 sigmoid(-1000)  # exp(1000) = inf -> 1/inf = NaN or 0/0
 ```
 
-**Why it is wrong:** `np.exp(-(-1000)) = np.exp(1000)` overflows float64 (max ~ 1.8e308), producing `inf`. Then `1 / (1 + inf)` produces 0.0 in some implementations but can produce NaN in edge cases, and more importantly, any downstream computation with the overflow intermediate can produce garbage.
+**Why it is wrong:** `np.exp(-(-1000)) = np.exp(1000)` overflows float64 (max $\sim 1.8 \times 10^{308}$), producing `inf`. Then $\frac{1}{1 + \infty}$ produces 0.0 in some implementations but can produce NaN in edge cases, and more importantly, any downstream computation with the overflow intermediate can produce garbage.
 
 **The fix:**
 ```python
@@ -1011,7 +1028,7 @@ def backward(self, grad_output):
     return grad_output * 0.5 * (1 + t)  # Missing the second term!
 ```
 
-**Why it is wrong:** `GELU(x) = 0.5 * x * (1 + t(x))` where `t` depends on `x`. The product rule gives TWO terms: `d/dx [x * g(x)] = g(x) + x * g'(x)`. The code above only has the first term.
+**Why it is wrong:** $\text{GELU}(x) = 0.5 \cdot x \cdot (1 + t(x))$ where $t$ depends on $x$. The product rule gives TWO terms: $\frac{d}{dx}[x \cdot g(x)] = g(x) + x \cdot g'(x)$. The code above only has the first term.
 
 **The fix:**
 ```python
@@ -1033,11 +1050,11 @@ def backward(self, grad_output):
 
 Activations are **memory-bandwidth-bound** operations. The arithmetic intensity for GELU is roughly:
 
-```
-~15 FLOPs per element / 16 bytes per element (read + write float64) ~ 1 FLOP/byte
-```
+$$
+\frac{\sim 15 \text{ FLOPs per element}}{16 \text{ bytes per element (read + write float64)}} \approx 1 \text{ FLOP/byte}
+$$
 
-Modern GPUs can do ~300 TFLOPS but only move ~3 TB/s. To saturate the compute, you need ~100 FLOPs/byte. Activations are 100x below that threshold. The GPU spends almost all its time waiting for memory, not computing.
+Modern GPUs can do $\sim 300$ TFLOPS but only move $\sim 3$ TB/s. To saturate the compute, you need $\sim 100$ FLOPs/byte. Activations are 100x below that threshold. The GPU spends almost all its time waiting for memory, not computing.
 
 ### Kernel Fusion -- The Primary Optimization
 
@@ -1058,7 +1075,7 @@ Fused (2 kernel launches, 2 memory round-trips):
 Savings: eliminated one full read+write of h (size: batch * seq * hidden)
 ```
 
-For a typical transformer layer with hidden dim 4096 and batch*seq = 65536, the intermediate tensor `h` is 65536 * 4096 * 4 bytes = 1 GB (in float32). Eliminating one round-trip of this tensor at 3 TB/s bandwidth saves ~0.33 ms. Across all layers and all forward passes, this adds up.
+For a typical transformer layer with hidden dim 4096 and $\text{batch} \times \text{seq} = 65536$, the intermediate tensor $h$ is $65536 \times 4096 \times 4 \text{ bytes} = 1 \text{ GB}$ (in float32). Eliminating one round-trip of this tensor at 3 TB/s bandwidth saves $\sim 0.33$ ms. Across all layers and all forward passes, this adds up.
 
 ### From Naive to Optimized
 
@@ -1069,7 +1086,7 @@ For a typical transformer layer with hidden dim 4096 and batch*seq = 65536, the 
 | Memory | Reads/writes full tensor | Computes inline, no extra write |
 | Precision | float64 | float16/bfloat16 (2-4x less memory traffic) |
 | Caching | Python dict with full copy | Register-level reuse in fused kernel |
-| Throughput | ~1 GFLOP/s | ~100 TFLOP/s |
+| Throughput | $\sim 1$ GFLOP/s | $\sim 100$ TFLOP/s |
 
 ### How Each Activation Maps to CUDA
 
@@ -1117,23 +1134,23 @@ The SiLU activation and the element-wise multiply are fused into a single kernel
 
 ### Quick Checks
 
-1. **What happens if you remove all activation functions from a 10-layer network?** The entire network collapses into a single linear transformation `y = W'x + b'`. Training it is equivalent to training one layer, regardless of depth.
+1. **What happens if you remove all activation functions from a 10-layer network?** The entire network collapses into a single linear transformation $y = W'x + b'$. Training it is equivalent to training one layer, regardless of depth.
 
-2. **Why does sigmoid's backward pass not need the original input x?** Because `sigmoid'(x) = s * (1 - s)` where `s = sigmoid(x)`. The derivative is expressed purely in terms of the output. This is a special property of the logistic function.
+2. **Why does sigmoid's backward pass not need the original input $x$?** Because $\sigma'(x) = s(1 - s)$ where $s = \sigma(x)$. The derivative is expressed purely in terms of the output. This is a special property of the logistic function.
 
-3. **Why does GELU need to cache x but Sigmoid does not?** GELU's backward uses the product rule on `0.5 * x * (1 + t)`, which requires `x` explicitly. Sigmoid's backward only needs `s = sigmoid(x)`.
+3. **Why does GELU need to cache $x$ but Sigmoid does not?** GELU's backward uses the product rule on $0.5 \cdot x \cdot (1 + t)$, which requires $x$ explicitly. Sigmoid's backward only needs $s = \sigma(x)$.
 
-4. **What is the maximum gradient of sigmoid, and at what input?** Maximum is 0.25, at x = 0. This is why sigmoid causes vanishing gradients -- even at its best, it attenuates gradients by 4x.
+4. **What is the maximum gradient of sigmoid, and at what input?** Maximum is 0.25, at $x = 0$. This is why sigmoid causes vanishing gradients -- even at its best, it attenuates gradients by 4x.
 
 5. **What is the output shape of any activation function?** Identical to the input shape. All activations are element-wise.
 
 ### Exercises
 
-1. **Easy**: Modify the `LeakyReLU` class to implement **PReLU** (Parametric ReLU), where alpha is a learnable parameter with its own gradient. Add a `backward_alpha` method that returns the gradient with respect to alpha.
+1. **Easy**: Modify the `LeakyReLU` class to implement **PReLU** (Parametric ReLU), where $\alpha$ is a learnable parameter with its own gradient. Add a `backward_alpha` method that returns the gradient with respect to $\alpha$.
 
-2. **Medium**: Implement **ELU** (Exponential Linear Unit): `f(x) = x if x > 0, alpha * (exp(x) - 1) if x <= 0`. Include both forward and backward, and verify with `gradient_check`.
+2. **Medium**: Implement **ELU** (Exponential Linear Unit): $f(x) = x$ if $x > 0$, $\alpha(e^x - 1)$ if $x \leq 0$. Include both forward and backward, and verify with `gradient_check`.
 
-3. **Hard**: Implement a **fused** GELU-Linear operation where `forward(x, W, b)` computes `GELU(x @ W + b)` in a single pass over the output elements (no intermediate tensor for the pre-activation). The backward should return gradients for x, W, and b.
+3. **Hard**: Implement a **fused** GELU-Linear operation where `forward(x, W, b)` computes $\text{GELU}(xW + b)$ in a single pass over the output elements (no intermediate tensor for the pre-activation). The backward should return gradients for $x$, $W$, and $b$.
 
 ---
 
@@ -1142,7 +1159,7 @@ The SiLU activation and the element-wise multiply are fused into a single kernel
 ### Key Takeaways
 
 - Without nonlinear activations, deep networks collapse to a single linear layer. Activations are what make depth useful.
-- Sigmoid and Tanh suffer from vanishing gradients: their derivatives approach zero for large |x|, killing gradient flow in deep networks.
+- Sigmoid and Tanh suffer from vanishing gradients: their derivatives approach zero for large $|x|$, killing gradient flow in deep networks.
 - ReLU fixed vanishing gradients with a gradient of exactly 0 or 1, but introduced the dying neuron problem where neurons with persistently negative inputs stop learning forever.
 - GELU and SiLU are smooth, non-monotonic, and never have zero gradient for finite inputs. They dominate modern transformers: GELU in GPT/BERT, SiLU in LLaMA/Mistral.
 - Activations are memory-bound, not compute-bound. The primary optimization is kernel fusion -- inlining the activation into the preceding matmul to eliminate a memory round-trip. Understanding the forward and backward formulas is prerequisite to writing these fused kernels.
