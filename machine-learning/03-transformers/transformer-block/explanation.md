@@ -32,67 +32,38 @@ If the attention room or the FFN room produces garbage, no problem -- the elevat
 
 ## Architecture Diagram
 
-```
-    Input x
-    (B, L, d_model)
-         |
-         |-------- COPY --------+         Residual Connection 1
-         |                      |
-    +----v-----+                |
-    | RMSNorm_1|  gamma_1       |
-    +----+-----+                |
-         |                      |
-    +----v-----+                |
-    | Q, K, V  |  W_Q, W_K, W_V|
-    | Projections               |
-    +----+-----+                |
-         |                      |
-    +----v-----+                |
-    | Reshape  |  Split heads   |
-    | Transpose|  (B,h,L,d_k)  |
-    +----+-----+                |
-         |                      |
-    +----v-----+                |
-    | RoPE     |  Rotate Q, K  |
-    +----+-----+                |
-         |                      |
-    +----v-----+                |
-    | Expand   |  repeat_kv    |
-    | KV Heads |  (GQA)        |
-    +----+-----+                |
-         |                      |
-    +----v-----+                |
-    | Scaled   |  QK^T/sqrt(dk)|
-    | Dot-Prod |  + causal mask |
-    | Attention|  softmax -> AV |
-    +----+-----+                |
-         |                      |
-    +----v-----+                |
-    | Merge    |  Concat heads  |
-    | Heads    |  @ W_O         |
-    +----+-----+                |
-         |                      |
-    +----v-----+   +------------+
-    |    +     |<--+               h = x + attn_out
-    +----+-----+
-         |
-         |-------- COPY --------+         Residual Connection 2
-         |                      |
-    +----v-----+                |
-    | RMSNorm_2|  gamma_2       |
-    +----+-----+                |
-         |                      |
-    +----v-----+                |
-    | SwiGLU   |  W_gate, W_up |
-    | FFN      |  W_down        |
-    +----+-----+                |
-         |                      |
-    +----v-----+   +------------+
-    |    +     |<--+               output = h + ffn_out
-    +----+-----+
-         |
-    Output
-    (B, L, d_model)
+```mermaid
+graph TD
+    X["Input x<br/>(B, L, d_model)"] --> COPY1{" "}
+    COPY1 -->|sublayer path| N1["RMSNorm₁<br/>γ₁"]
+    COPY1 -->|residual path| ADD1
+
+    N1 --> QKV["Q, K, V Projections<br/>W_Q, W_K, W_V"]
+    QKV --> SPLIT["Reshape + Transpose<br/>Split heads → (B, h, L, d_k)"]
+    SPLIT --> ROPE["RoPE<br/>Rotate Q, K"]
+    ROPE --> EXPAND["Expand KV Heads<br/>repeat_kv (GQA)"]
+    EXPAND --> ATTN["Scaled Dot-Product Attention<br/>QKᵀ/√d_k + causal mask → softmax → AV"]
+    ATTN --> MERGE["Merge Heads + Output Proj<br/>Concat → W_O"]
+    MERGE --> ADD1["⊕ Residual 1<br/>h = x + attn_out"]
+
+    ADD1 --> COPY2{" "}
+    COPY2 -->|sublayer path| N2["RMSNorm₂<br/>γ₂"]
+    COPY2 -->|residual path| ADD2
+
+    N2 --> FFN["SwiGLU FFN<br/>W_gate, W_up, W_down"]
+    FFN --> ADD2["⊕ Residual 2<br/>output = h + ffn_out"]
+
+    ADD2 --> OUT["Output<br/>(B, L, d_model)"]
+
+    style COPY1 fill:none,stroke:none
+    style COPY2 fill:none,stroke:none
+    style ADD1 fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+    style ADD2 fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+    style N1 fill:#fff3e0,stroke:#ff9800
+    style N2 fill:#fff3e0,stroke:#ff9800
+    style ATTN fill:#e3f2fd,stroke:#2196f3
+    style FFN fill:#fce4ec,stroke:#e91e63
+    style ROPE fill:#f3e5f5,stroke:#9c27b0
 ```
 
 Notice the two residual "highways" that run straight through. The sublayer outputs (attention and FFN) are *added* to the residual stream, never replacing it. Normalization happens *before* each sublayer (pre-norm), not after.
@@ -205,27 +176,22 @@ $$\text{SiLU}(-1) = -1 \cdot \sigma(-1) = -1 \cdot 0.2689 = -0.2689$$
 
 Let us trace through SwiGLU with a concrete picture of what the two pathways do:
 
-```
-                          x (B, L, d_model)
-                          |
-                +---------+---------+
-                |                   |
-                v                   v
-         x @ W_gate            x @ W_up
-         (B, L, d_ff)         (B, L, d_ff)
-                |                   |
-                v                   |
-           SiLU(gate)               |
-         "How much to                |
-          let through"               |
-                |                   |
-                +--------*----------+     Element-wise multiply
-                         |
-                   hidden (B, L, d_ff)    "Gated features"
-                         |
-                         v
-                  hidden @ W_down
-                  (B, L, d_model)         "Back to model dimension"
+```mermaid
+graph TD
+    X["x<br/>(B, L, d_model)"] --> GATE["x @ W_gate<br/>(B, L, d_ff)"]
+    X --> UP["x @ W_up<br/>(B, L, d_ff)"]
+
+    GATE --> SILU["SiLU(gate)<br/><i>How much to let through</i>"]
+    SILU --> MUL["⊙ Element-wise multiply"]
+    UP --> MUL
+
+    MUL --> HIDDEN["hidden<br/>(B, L, d_ff)<br/><i>Gated features</i>"]
+    HIDDEN --> DOWN["hidden @ W_down<br/>(B, L, d_model)"]
+
+    style GATE fill:#fff3e0,stroke:#ff9800
+    style UP fill:#e3f2fd,stroke:#2196f3
+    style SILU fill:#fce4ec,stroke:#e91e63
+    style MUL fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
 ```
 
 The gate pathway decides the *magnitude* (and slight sign flip) of each feature. The up pathway provides the *content*. Their element-wise product is a learned, input-dependent filtering of the features. This is more expressive than simply applying an activation function: the gate and the content see the same input through different weight matrices, so the network can learn "when feature $j$ in the content is large, suppress it" or "when feature $j$ is small, amplify it."
@@ -323,25 +289,29 @@ $$\text{output} = x + \text{sublayer}(\text{RMSNorm}(x))$$
 
 Normalization is applied *before* the sublayer, and the residual addition is the very last step.
 
-```
-Post-norm:                          Pre-norm:
+```mermaid
+graph TD
+    subgraph Post-Norm
+        direction TB
+        PX["x"] --> PN["Norm"]
+        PX --> PADD["⊕"]
+        PN --> PSUB["Sublayer"]
+        PSUB --> PADD
+        PADD --> PNORM2["Norm ← after residual"]
+        PNORM2 --> POUT["output"]
+    end
 
-  x -----+                           x -----+
-  |       |                           |       |
-  v       |                           v       |
- Norm     |                          Norm     |
-  |       |                           |       |
-  v       |                           v       |
-Sublayer  |                         Sublayer  |
-  |       |                           |       |
-  v       v                           v       v
-  +-------+                           +-------+
-  |                                   |
-  v                                   v
- Norm   <-- normalization AFTER      output  <-- no normalization after
-  |
-  v
-output
+    subgraph Pre-Norm
+        direction TB
+        RX["x"] --> RN["Norm"]
+        RX --> RADD["⊕"]
+        RN --> RSUB["Sublayer"]
+        RSUB --> RADD
+        RADD --> ROUT["output ← no norm after"]
+    end
+
+    style PNORM2 fill:#ffcdd2,stroke:#e53935
+    style RADD fill:#c8e6c9,stroke:#43a047
 ```
 
 ### Why Modern LLMs Switched to Pre-Norm
@@ -601,20 +571,23 @@ The tensor has four dimensions $(B, h, L, d_k)$. We need to transpose only the l
 
 The backward pass is the reverse of the forward pass, but with a crucial pattern at each residual connection: the gradient **splits** into two paths (sublayer and residual), flows through each independently, and then **merges** by addition at the input.
 
-```
-Forward:  output = h + ffn_out        Backward:  d_output
-                                                    |
-                                              +-----+-----+
-                                              |           |
-                                         d_h (copy)   d_ffn_out (copy)
-                                              |           |
-                                              |     SwiGLU backward
-                                              |           |
-                                              |     RMSNorm_2 backward
-                                              |           |
-                                              +-----+-----+
-                                                    |
-                                              d_h = d_h_res + d_h_from_ffn
+```mermaid
+graph TD
+    GRAD["∂L/∂output"] --> SPLIT{" "}
+    SPLIT -->|"direct (copy)"| DH["∂L/∂h<br/>(residual path)"]
+    SPLIT -->|"through sublayer (copy)"| DFFN["∂L/∂ffn_out"]
+
+    DFFN --> SWIGLU_BW["SwiGLU backward"]
+    SWIGLU_BW --> NORM2_BW["RMSNorm₂ backward"]
+    NORM2_BW --> DH_FFN["∂L/∂h<br/>(from FFN path)"]
+
+    DH --> MERGE["⊕ Merge<br/>∂L/∂h = direct + from_ffn"]
+    DH_FFN --> MERGE
+
+    style SPLIT fill:none,stroke:none
+    style MERGE fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+    style DH fill:#e3f2fd,stroke:#2196f3
+    style DH_FFN fill:#fce4ec,stroke:#e91e63
 ```
 
 At `output = h + ffn_out`, the gradient of a sum distributes to both operands:
