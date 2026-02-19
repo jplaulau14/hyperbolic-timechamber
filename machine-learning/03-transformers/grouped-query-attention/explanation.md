@@ -26,11 +26,12 @@ Think about it this way: in standard MHA with 64 heads, heads 0 through 7 might 
 
 This creates a spectrum controlled by a single parameter, $h_{kv}$ (the number of KV heads):
 
-```
-MHA  (h_kv = h)     GQA (1 < h_kv < h)     MQA (h_kv = 1)
-No sharing           Groups share            All share
-Full memory          Reduced memory          Minimal memory
-Full quality         Near-full quality       Some quality loss
+```mermaid
+graph LR
+    MHA["<b>MHA</b><br/>h_kv = h<br/>No sharing<br/>Full memory<br/>Full quality"]
+    GQA["<b>GQA</b><br/>1 &lt; h_kv &lt; h<br/>Groups share<br/>Reduced memory<br/>Near-full quality"]
+    MQA["<b>MQA</b><br/>h_kv = 1<br/>All share<br/>Minimal memory<br/>Some quality loss"]
+    MHA --- GQA --- MQA
 ```
 
 ### Real-World Analogy
@@ -157,17 +158,30 @@ This is the single operation that distinguishes GQA from MHA. Suppose we have $h
 
 Before expansion, K has shape $(B, 2, L, d_k)$ -- just 2 KV heads:
 
-```
-K heads:  [  KV_0  |  KV_1  ]
-           head 0    head 1
+```mermaid
+block-beta
+    columns 2
+    KV0["KV_0\nhead 0"]:1
+    KV1["KV_1\nhead 1"]:1
 ```
 
 After `repeat_kv(K, g=4)`, K_exp has shape $(B, 8, L, d_k)$ -- 8 heads:
 
-```
-K_exp:    [  KV_0  |  KV_0  |  KV_0  |  KV_0  |  KV_1  |  KV_1  |  KV_1  |  KV_1  ]
-           head 0    head 1    head 2    head 3    head 4    head 5    head 6    head 7
-           \_____________ group 0 _____________/  \_____________ group 1 _____________/
+```mermaid
+block-beta
+    columns 8
+    block:group0:4
+        h0["KV_0\nhead 0"]
+        h1["KV_0\nhead 1"]
+        h2["KV_0\nhead 2"]
+        h3["KV_0\nhead 3"]
+    end
+    block:group1:4
+        h4["KV_1\nhead 4"]
+        h5["KV_1\nhead 5"]
+        h6["KV_1\nhead 6"]
+        h7["KV_1\nhead 7"]
+    end
 ```
 
 Now query heads 0-3 all compute attention against the same keys (KV_0), and query heads 4-7 all compute attention against the same keys (KV_1). But each query head still has its own unique $Q$ vectors, so they produce *different attention patterns* over the shared keys.
@@ -225,59 +239,36 @@ The early return for `num_repeats == 1` is not just an optimization -- it is the
 
 ## The Full Forward Pass -- Data Flow with Shapes
 
-```
-    Input X
-    (B, L, d_model)
-         |
-    +----+-----+-----+
-    |          |          |
-    v          v          v
-  X @ W_Q    X @ W_K    X @ W_V              Three GEMMs (K, V are smaller)
-  (B,L,d_m)  (B,L,h_kv*dk) (B,L,h_kv*dv)
-    |          |          |
-    v          v          v
-  reshape    reshape    reshape
-  (B,L,h,dk) (B,L,h_kv,dk) (B,L,h_kv,dv)
-    |          |          |
-    v          v          v
-  transpose  transpose  transpose
-  (B,h,L,dk) (B,h_kv,L,dk) (B,h_kv,L,dv)
-    |          |          |
-    |          v          v
-    |       repeat_kv  repeat_kv             *** GQA-specific step ***
-    |       (B,h,L,dk) (B,h,L,dv)
-    |          |          |
-    +----+-----+          |
-         |                |
-         v                |
-    Q @ K_exp^T / sqrt(dk)|                  Batched over B and h
-    (B, h, L, L)          |
-         |                |
-         v                |
-    + causal mask         |                  Broadcasting (1,1,L,L)
-    (B, h, L, L)          |
-         |                |
-         v                |
-    softmax(axis=-1)      |
-    (B, h, L, L)          |
-         |                |
-         +--------+-------+
-                  |
-                  v
-             A @ V_exp                       Batched matmul
-             (B, h, L, dv)
-                  |
-                  v
-             transpose(0,2,1,3)
-             (B, L, h, dv)
-                  |
-                  v
-             reshape(B, L, d_model)          Merge heads
-             (B, L, d_model)
-                  |
-                  v
-             concat @ W_O + b_O             Output projection
-             (B, L, d_model)
+```mermaid
+flowchart TD
+    X["Input X<br/>(B, L, d_model)"]
+    X --> WQ["X @ W_Q<br/>(B, L, d_model)"]
+    X --> WK["X @ W_K<br/>(B, L, h_kv·d_k)"]
+    X --> WV["X @ W_V<br/>(B, L, h_kv·d_v)"]
+
+    WQ --> RQ["reshape<br/>(B, L, h, d_k)"]
+    WK --> RK["reshape<br/>(B, L, h_kv, d_k)"]
+    WV --> RV["reshape<br/>(B, L, h_kv, d_v)"]
+
+    RQ --> TQ["transpose<br/>(B, h, L, d_k)"]
+    RK --> TK["transpose<br/>(B, h_kv, L, d_k)"]
+    RV --> TV["transpose<br/>(B, h_kv, L, d_v)"]
+
+    TK --> RepK["repeat_kv ⟵ GQA step<br/>(B, h, L, d_k)"]
+    TV --> RepV["repeat_kv ⟵ GQA step<br/>(B, h, L, d_v)"]
+
+    TQ --> Scores["Q @ K_exp^T / sqrt(d_k)<br/>(B, h, L, L)"]
+    RepK --> Scores
+
+    Scores --> Mask["+ causal mask<br/>(B, h, L, L)"]
+    Mask --> Softmax["softmax(axis=-1)<br/>(B, h, L, L)"]
+
+    Softmax --> AV["A @ V_exp<br/>(B, h, L, d_v)"]
+    RepV --> AV
+
+    AV --> Trans["transpose(0,2,1,3)<br/>(B, L, h, d_v)"]
+    Trans --> Merge["reshape(B, L, d_model)<br/>(B, L, d_model)"]
+    Merge --> Out["concat @ W_O + b_O<br/>(B, L, d_model)"]
 ```
 
 The diagram is almost identical to standard MHA. The only structural difference is the `repeat_kv` step inserted between the head split and the attention computation. The K and V projections also produce smaller outputs ($h_{kv} \cdot d_k$ instead of $h \cdot d_k$).
@@ -477,16 +468,26 @@ def reduce_kv_grad(grad_expanded, num_kv_heads, group_size):
 
 For $h = 8$, $h_{kv} = 2$, $g = 4$:
 
-```
-grad_K_exp (B, 8, L, d_k):  [g0  g1  g2  g3 | g4  g5  g6  g7]
-                              \__ group 0 __/   \__ group 1 __/
+```mermaid
+flowchart TD
+    subgraph GradExp["grad_K_exp (B, 8, L, d_k)"]
+        direction LR
+        subgraph G0["Group 0"]
+            g0["g0"]
+            g1["g1"]
+            g2["g2"]
+            g3["g3"]
+        end
+        subgraph G1["Group 1"]
+            g4["g4"]
+            g5["g5"]
+            g6["g6"]
+            g7["g7"]
+        end
+    end
 
-reshape to (B, 2, 4, L, d_k):
-  group 0: [g0, g1, g2, g3]     group 1: [g4, g5, g6, g7]
-
-sum over axis 2:
-  grad_K (B, 2, L, d_k):   [g0+g1+g2+g3 | g4+g5+g6+g7]
-                             \_ KV head 0_/ \_ KV head 1_/
+    GradExp -->|"reshape to (B, 2, 4, L, d_k)"| Reshape["group 0: [g0, g1, g2, g3]<br/>group 1: [g4, g5, g6, g7]"]
+    Reshape -->|"sum over axis 2"| GradK["grad_K (B, 2, L, d_k)<br/>KV head 0: g0+g1+g2+g3<br/>KV head 1: g4+g5+g6+g7"]
 ```
 
 Each KV head receives the **sum** of gradients from all the query heads that shared it.
@@ -775,7 +776,7 @@ K = K.reshape(B, L, self.num_heads, self.d_k).transpose(0, 2, 1, 3)
 K = K.reshape(B, L, self.num_kv_heads, self.d_k).transpose(0, 2, 1, 3)
 ```
 
-### Pitfall 4: Not Handling the g = 1 Case in repeat_kv
+### Pitfall 4: Not Handling the $g = 1$ Case in repeat_kv
 
 **The mistake:**
 
@@ -807,19 +808,26 @@ GQA exists because of the KV cache. During autoregressive generation, each new t
 
 The KV cache stores K and V in their *pre-expansion* form -- shape $(B, h_{kv}, L, d_k)$, not $(B, h, L, d_k)$. The `repeat_kv` expansion happens at attention computation time, and in optimized implementations, it is done via broadcasting without materializing the expanded tensor.
 
-```
-Standard MHA KV Cache:              GQA KV Cache:
-
-  Layer 0: K (B, h, L, d_k)          Layer 0: K (B, h_kv, L, d_k)
-           V (B, h, L, d_v)                   V (B, h_kv, L, d_v)
-  Layer 1: K (B, h, L, d_k)          Layer 1: K (B, h_kv, L, d_k)
-           V (B, h, L, d_v)                   V (B, h_kv, L, d_v)
-  ...                                 ...
-  Layer N: K (B, h, L, d_k)          Layer N: K (B, h_kv, L, d_k)
-           V (B, h, L, d_v)                   V (B, h_kv, L, d_v)
-
-  Total: 2 * N * B * h * L * d_k      Total: 2 * N * B * h_kv * L * d_k
-                                       Savings: h / h_kv = g times smaller
+```mermaid
+flowchart LR
+    subgraph MHA["Standard MHA KV Cache"]
+        direction TB
+        M0["Layer 0: K (B, h, L, d_k) &nbsp; V (B, h, L, d_v)"]
+        M1["Layer 1: K (B, h, L, d_k) &nbsp; V (B, h, L, d_v)"]
+        Mdots["..."]
+        MN["Layer N: K (B, h, L, d_k) &nbsp; V (B, h, L, d_v)"]
+        M0 --- M1 --- Mdots --- MN
+        MT["Total: 2 · N · B · h · L · d_k"]
+    end
+    subgraph GQA["GQA KV Cache"]
+        direction TB
+        G0["Layer 0: K (B, h_kv, L, d_k) &nbsp; V (B, h_kv, L, d_v)"]
+        G1["Layer 1: K (B, h_kv, L, d_k) &nbsp; V (B, h_kv, L, d_v)"]
+        Gdots["..."]
+        GN["Layer N: K (B, h_kv, L, d_k) &nbsp; V (B, h_kv, L, d_v)"]
+        G0 --- G1 --- Gdots --- GN
+        GT["Total: 2 · N · B · h_kv · L · d_k<br/>Savings: h / h_kv = g times smaller"]
+    end
 ```
 
 ### From Naive to Optimized
@@ -847,24 +855,24 @@ In PyTorch, the equivalent can be done without copying:
 K_exp = K[:, :, None, :, :].expand(B, h_kv, g, L, d_k).reshape(B, h, L, d_k)
 ```
 
-This is important because the expanded K is $g$ times larger than the original. For Llama 2 70B with $g = 8$, materializing the expansion would consume 8x more memory for the K and V intermediates.
+This is important because the expanded K is $g$ times larger than the original. For Llama 2 70B with $g = 8$, materializing the expansion would consume $8\times$ more memory for the K and V intermediates.
 
 ### Interaction with Other Optimizations
 
 | Optimization | How GQA Interacts |
 |-------------|-------------------|
-| **KV Cache** | Stores $(B, h_{kv}, L, d_k)$ instead of $(B, h, L, d_k)$. $g$x memory savings. |
+| **KV Cache** | Stores $(B, h_{kv}, L, d_k)$ instead of $(B, h, L, d_k)$. $g\times$ memory savings. |
 | **PagedAttention (vLLM)** | Smaller KV per token means more tokens per page, less fragmentation. |
 | **Flash Attention** | Unchanged -- operates per head. Just fewer unique KV heads to process. |
 | **Tensor Parallelism** | KV heads may be fewer than GPU count. With 8 KV heads and 8 GPUs, each GPU gets 1 KV head but 4-8 query heads. |
 | **Speculative Decoding** | Smaller KV cache means cheaper verification of draft tokens. |
-| **Quantization** | KV cache quantization (e.g., INT8 KV) compounds with GQA: $g$x from GQA $\times$ 2x from INT8 = $2g$x total reduction. |
+| **Quantization** | KV cache quantization (e.g., INT8 KV) compounds with GQA: $g\times$ from GQA $\times$ $2\times$ from INT8 = $2g\times$ total reduction. |
 
 ### Why Not Always Use MQA?
 
-MQA ($h_{kv} = 1$) gives maximum memory savings -- $h$x reduction. But empirical results show quality degradation, especially on tasks requiring diverse attention patterns. With a single KV head, all query heads attend over the same key-value representation. They can compute *different attention weights* (because $Q$ differs), but the information they can *extract* from V is constrained to one shared representation.
+MQA ($h_{kv} = 1$) gives maximum memory savings -- $h\times$ reduction. But empirical results show quality degradation, especially on tasks requiring diverse attention patterns. With a single KV head, all query heads attend over the same key-value representation. They can compute *different attention weights* (because $Q$ differs), but the information they can *extract* from V is constrained to one shared representation.
 
-GQA with $h_{kv} = 8$ preserves 8 independent KV representations. Each KV head can specialize (e.g., one for local patterns, one for syntactic relations, one for semantic similarity). The quality-efficiency tradeoff is empirically favorable: Llama 2 70B with GQA matches or exceeds MHA baselines while using 8x less KV cache.
+GQA with $h_{kv} = 8$ preserves 8 independent KV representations. Each KV head can specialize (e.g., one for local patterns, one for syntactic relations, one for semantic similarity). The quality-efficiency tradeoff is empirically favorable: Llama 2 70B with GQA matches or exceeds MHA baselines while using $8\times$ less KV cache.
 
 ---
 
@@ -926,7 +934,7 @@ def test_attention_core_same_for_mha_and_gqa(self):
 
 4. **Why are the attention core FLOPs identical for MHA and GQA?** The $QK^\top$ and $AV$ matmuls involve $h$ query heads regardless. Each query head computes a $(L, d_k) \times (d_k, L)$ matmul, and there are $h$ such matmuls. The fact that some heads share K/V does not reduce the number of matmuls -- it only reduces the amount of *unique* K/V data.
 
-5. **What is the KV cache memory ratio between Llama 2 70B's actual GQA design and a hypothetical MHA version?** $h / h_{kv} = 64 / 8 = 8$x. GQA uses 8x less KV cache memory.
+5. **What is the KV cache memory ratio between Llama 2 70B's actual GQA design and a hypothetical MHA version?** $h / h_{kv} = 64 / 8 = 8\times$. GQA uses $8\times$ less KV cache memory.
 
 ### Exercises
 
@@ -952,35 +960,32 @@ def test_attention_core_same_for_mha_and_gqa(self):
 
 ### Quick Reference
 
-```
-Grouped-Query Attention
-|-- Forward:  O(8BLd^2_model + 4BhL^2 d_k) -- projections + attention core
-|             (K/V projections are smaller: d_model * h_kv * d_k instead of d_model^2)
-|-- Backward: ~2x forward (+ reduce_kv_grad: reshape + sum over group axis)
-|-- Memory:   O(BLd + BhL^2) -- intermediates + attention matrices
-|
-|-- Projections:
-|   |-- W_Q: (d_model, d_model)             -- full size
-|   |-- W_K: (d_model, h_kv * d_k)          -- reduced
-|   |-- W_V: (d_model, h_kv * d_v)          -- reduced
-|   |-- W_O: (d_model, d_model)             -- full size
-|
-|-- Key shapes:
-|   |-- Q after split:   (B, h, L, d_k)
-|   |-- K after split:   (B, h_kv, L, d_k)   <-- fewer heads
-|   |-- K after expand:  (B, h, L, d_k)       <-- repeat_kv
-|   |-- Attention A:     (B, h, L, L)         <-- h query heads
-|
-|-- KV cache per layer: 2 * B * h_kv * L * d_k * bytes
-|-- KV cache reduction: h / h_kv = g times vs MHA
-|
-|-- Special cases:
-|   |-- h_kv = h:   MHA (repeat_kv is no-op)
-|   |-- h_kv = 1:   MQA (all queries share one KV head)
-|
-|-- Optimized by:
-    |-- Broadcasting: avoid materializing repeat_kv expansion
-    |-- Flash Attention: tiled attention, O(L) memory
-    |-- KV cache: store h_kv heads, not h
-    |-- Tensor Parallelism: split heads across GPUs
+```mermaid
+mindmap
+  root((Grouped-Query Attention))
+    Complexity
+      Forward: O(8BLd²_model + 4BhL²d_k)
+      Backward: ~2x forward + reduce_kv_grad
+      Memory: O(BLd + BhL²)
+    Projections
+      W_Q: (d_model, d_model) -- full
+      W_K: (d_model, h_kv·d_k) -- reduced
+      W_V: (d_model, h_kv·d_v) -- reduced
+      W_O: (d_model, d_model) -- full
+    Key Shapes
+      Q after split: (B, h, L, d_k)
+      K after split: (B, h_kv, L, d_k)
+      K after expand: (B, h, L, d_k)
+      Attention A: (B, h, L, L)
+    KV Cache
+      Per layer: 2·B·h_kv·L·d_k·bytes
+      Reduction: h/h_kv = g times vs MHA
+    Special Cases
+      h_kv = h: MHA, repeat_kv is no-op
+      h_kv = 1: MQA, all share one KV head
+    Optimizations
+      Broadcasting: avoid materializing expansion
+      Flash Attention: tiled, O(L) memory
+      KV cache: store h_kv heads, not h
+      Tensor Parallelism: split across GPUs
 ```

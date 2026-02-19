@@ -107,37 +107,48 @@ $$Q_{\text{fused}} = X \cdot W^Q \quad \in \mathbb{R}^{B \times L \times d_{\tex
 
 Now the trick: the last dimension $d_{\text{model}}$ is actually $h$ groups of $d_k$ values. We reinterpret this via reshape:
 
-```
-Memory layout (one token's Q values):
-[q_0, q_1, q_2, q_3, q_4, q_5, q_6, q_7]
- \___ head 0 ___/  \___ head 1 ___/
-       d_k=4              d_k=4
+```mermaid
+block-beta
+  columns 8
+  q0["q_0"] q1["q_1"] q2["q_2"] q3["q_3"] q4["q_4"] q5["q_5"] q6["q_6"] q7["q_7"]
+  head0["head 0 (d_k=4)"]:4 head1["head 1 (d_k=4)"]:4
 ```
 
 ### Memory Layout in Detail
 
 After the projection, $Q$ has shape $(B, L, d_{\text{model}})$ and is contiguous in memory -- elements are laid out as:
 
+```mermaid
+block-beta
+  columns 4
+  a["q[b, l, 0]"] b["q[b, l, 1]"] c["..."] d["q[b, l, d_model-1]"]
 ```
-q[b, l, 0], q[b, l, 1], ..., q[b, l, d_model-1]   (for each b, l)
-```
+
+(for each $b$, $l$)
 
 **Reshape to $(B, L, h, d_k)$**: This is a zero-cost reinterpretation. No data is copied. NumPy simply changes the shape metadata. The element at position `[b, l, i, j]` is the same memory location as `[b, l, i*d_k + j]`.
 
 **Transpose to $(B, h, L, d_k)$**: This swaps axes 1 and 2. Now elements within a single head across sequence positions are "nearby" in the logical layout. However, this creates a **non-contiguous** view -- the strides change from $(L \cdot d_{\text{model}},\; d_{\text{model}},\; d_k,\; 1)$ to $(L \cdot d_{\text{model}},\; d_k,\; d_{\text{model}},\; 1)$.
 
-```
-Before transpose (B, L, h, d_k) -- contiguous:
-Strides: (L*d_model, d_model, d_k, 1)
-
-     Axis 0 (B)      Axis 1 (L)    Axis 2 (h)   Axis 3 (d_k)
-     jump d_model*L   jump d_model   jump d_k     jump 1
-
-After transpose (B, h, L, d_k) -- non-contiguous:
-Strides: (L*d_model, d_k, d_model, 1)
-
-     Axis 0 (B)      Axis 1 (h)    Axis 2 (L)   Axis 3 (d_k)
-     jump d_model*L   jump d_k      jump d_model  jump 1
+```mermaid
+graph LR
+  subgraph before["Before transpose (B, L, h, d_k) — contiguous"]
+    direction LR
+    B0["Axis 0 (B)\nstride: L * d_model"]
+    L0["Axis 1 (L)\nstride: d_model"]
+    H0["Axis 2 (h)\nstride: d_k"]
+    D0["Axis 3 (d_k)\nstride: 1"]
+    B0 --> L0 --> H0 --> D0
+  end
+  subgraph after["After transpose (B, h, L, d_k) — non-contiguous"]
+    direction LR
+    B1["Axis 0 (B)\nstride: L * d_model"]
+    H1["Axis 1 (h)\nstride: d_k"]
+    L1["Axis 2 (L)\nstride: d_model"]
+    D1["Axis 3 (d_k)\nstride: 1"]
+    B1 --> H1 --> L1 --> D1
+  end
+  before --> after
 ```
 
 After transpose, stepping along the sequence dimension (axis 2) requires jumping by $d_{\text{model}}$ elements instead of $d_k$. In production code, calling `.contiguous()` (PyTorch) or `np.ascontiguousarray()` copies data into a new layout for better cache performance.
@@ -148,55 +159,33 @@ After transpose, stepping along the sequence dimension (axis 2) requires jumping
 
 The implementation follows this data flow:
 
-```
-    Input X
-    (B, L, d_model)
-         |
-    +----+----+----+
-    |         |         |
-    v         v         v
-  X @ W_Q   X @ W_K   X @ W_V         Three fused GEMMs
-  (B,L,dm)  (B,L,dm)  (B,L,dm)
-    |         |         |
-    v         v         v
-  reshape   reshape   reshape          Zero-cost reinterpretation
-  (B,L,h,dk)(B,L,h,dk)(B,L,h,dk)
-    |         |         |
-    v         v         v
-  transpose transpose transpose        Creates strided view
-  (B,h,L,dk)(B,h,L,dk)(B,h,L,dk)
-    |         |         |
-    +----+----+         |
-         |              |
-         v              |
-    Q @ K^T / sqrt(dk)  |              Batched over B and h
-    (B, h, L, L)        |
-         |              |
-         v              |
-    + causal mask       |              Broadcasting (1,1,L,L)
-    (B, h, L, L)        |
-         |              |
-         v              |
-    softmax(axis=-1)    |
-    (B, h, L, L)        |
-         |              |
-         +-------+------+
-                 |
-                 v
-            A @ V                       Batched matmul
-            (B, h, L, dk)
-                 |
-                 v
-            transpose(0,2,1,3)          Reverse the split
-            (B, L, h, dk)
-                 |
-                 v
-            reshape(B, L, d_model)      Merge heads
-            (B, L, d_model)
-                 |
-                 v
-            concat @ W_O                Output projection
-            (B, L, d_model)
+```mermaid
+flowchart TD
+    X["Input X\n(B, L, d_model)"]
+    X --> WQ["X @ W_Q\n(B, L, d_model)"]
+    X --> WK["X @ W_K\n(B, L, d_model)"]
+    X --> WV["X @ W_V\n(B, L, d_model)"]
+
+    WQ -->|"reshape\n(zero-cost)"| RQ["Q reshaped\n(B, L, h, d_k)"]
+    WK -->|"reshape\n(zero-cost)"| RK["K reshaped\n(B, L, h, d_k)"]
+    WV -->|"reshape\n(zero-cost)"| RV["V reshaped\n(B, L, h, d_k)"]
+
+    RQ -->|"transpose\n(strided view)"| TQ["Q\n(B, h, L, d_k)"]
+    RK -->|"transpose\n(strided view)"| TK["K\n(B, h, L, d_k)"]
+    RV -->|"transpose\n(strided view)"| TV["V\n(B, h, L, d_k)"]
+
+    TQ --> SCORES["Q @ K^T / sqrt(d_k)\n(B, h, L, L)\nbatched over B and h"]
+    TK --> SCORES
+
+    SCORES --> MASK["+ causal mask\n(B, h, L, L)\nbroadcast from (1,1,L,L)"]
+    MASK --> SM["softmax(axis=-1)\n(B, h, L, L)"]
+
+    SM --> AV["A @ V\n(B, h, L, d_k)\nbatched matmul"]
+    TV --> AV
+
+    AV -->|"transpose(0,2,1,3)"| TR["Reverse split\n(B, L, h, d_k)"]
+    TR -->|"reshape"| MH["Merge heads\n(B, L, d_model)"]
+    MH --> OUT["concat @ W_O\n(B, L, d_model)\noutput projection"]
 ```
 
 ### Implementation Walkthrough
@@ -600,12 +589,15 @@ After adding to scores and applying softmax, $e^{-\infty} = 0$, so future positi
 
 The attention scores have shape $(B, h, L, L)$. The mask needs to broadcast across batch and heads:
 
-```
-Scores:   (B, h, L, L)       e.g., (32, 8, 512, 512)
-Mask:     (1, 1, L, L)       e.g., ( 1, 1, 512, 512)
-                                     ^  ^
-                                     |  |
-                            broadcasts over B and h
+```mermaid
+graph LR
+    subgraph Scores["Scores: (B, h, L, L)"]
+        S["e.g. (32, 8, 512, 512)"]
+    end
+    subgraph Mask["Mask: (1, 1, L, L)"]
+        M["e.g. (1, 1, 512, 512)"]
+    end
+    Mask -- "broadcasts over B and h" --> Scores
 ```
 
 Every batch element and every head sees the **same** causal constraint. This is correct because causality is not head-specific -- no head should attend to future tokens regardless of what pattern it has learned.
@@ -822,7 +814,7 @@ For Llama 2 70B ($h = 64$, $d_k = 128$, 80 layers), generating a 4096-token sequ
 
 $$2 \times 1 \times 64 \times 4096 \times 128 \times 2 \times 80 \approx 10.7 \text{ GB}$$
 
-That is 10.7 GB *just for the KV cache* of one sequence.
+That is $10.7$ GB *just for the KV cache* of one sequence.
 
 ### Grouped-Query Attention (GQA)
 
@@ -836,11 +828,20 @@ GQA reduces KV cache by sharing $K$ and $V$ heads across groups of $Q$ heads:
 
 With GQA, $h/g$ query heads share each K/V head. The modification to our implementation would be:
 
-```
-MHA:  Q (B, h, L, d_k)   K (B, h, L, d_k)   V (B, h, L, d_k)
-GQA:  Q (B, h, L, d_k)   K (B, g, L, d_k)   V (B, g, L, d_k)
-                               ^                   ^
-                          fewer heads          fewer heads
+```mermaid
+graph TB
+    subgraph MHA["MHA (all h heads)"]
+        direction LR
+        MQ["Q\n(B, h, L, d_k)"]
+        MK["K\n(B, h, L, d_k)"]
+        MV["V\n(B, h, L, d_k)"]
+    end
+    subgraph GQA["GQA (g < h groups)"]
+        direction LR
+        GQ["Q\n(B, h, L, d_k)"]
+        GK["K\n(B, g, L, d_k)\nfewer heads"]
+        GV["V\n(B, g, L, d_k)\nfewer heads"]
+    end
 ```
 
 Each group of $h/g$ query heads attends to the same K/V head. Understanding the head dimension from MHA makes this modification straightforward: instead of projecting to $h$ K/V heads, project to $g < h$ heads and broadcast.
@@ -858,26 +859,25 @@ Multi-head attention is embarrassingly parallel across heads. Each head:
 
 This maps directly to tensor parallelism (Megatron-LM style):
 
-```
-                    Input X (replicated on all GPUs)
-                              |
-            +--------+--------+--------+--------+
-            |        |        |        |        |
-          GPU 0    GPU 1    GPU 2    GPU 3
-        heads 0-3  heads 4-7 heads 8-11 heads 12-15
-            |        |        |        |
-            |   Column slices of W_Q, W_K, W_V
-            |   Each GPU: (d_model, d_model/4)
-            |        |        |        |
-            v        v        v        v
-        Local Q,K,V  Local    Local    Local
-        attention    attn     attn     attn
-            |        |        |        |
-            +--------+--------+--------+--------+
-                              |
-                         All-Reduce
-                              |
-                        Output (B, L, d_model)
+```mermaid
+flowchart TD
+    X["Input X\n(replicated on all GPUs)"]
+    X --> G0["GPU 0\nheads 0-3"]
+    X --> G1["GPU 1\nheads 4-7"]
+    X --> G2["GPU 2\nheads 8-11"]
+    X --> G3["GPU 3\nheads 12-15"]
+
+    G0 -->|"column slice of W_Q, W_K, W_V\n(d_model, d_model/4)"| A0["Local attention"]
+    G1 -->|"column slice of W_Q, W_K, W_V\n(d_model, d_model/4)"| A1["Local attention"]
+    G2 -->|"column slice of W_Q, W_K, W_V\n(d_model, d_model/4)"| A2["Local attention"]
+    G3 -->|"column slice of W_Q, W_K, W_V\n(d_model, d_model/4)"| A3["Local attention"]
+
+    A0 --> AR["All-Reduce"]
+    A1 --> AR
+    A2 --> AR
+    A3 --> AR
+
+    AR --> OUT["Output\n(B, L, d_model)"]
 ```
 
 **Column-parallel**: Each GPU holds columns of $W^Q$, $W^K$, $W^V$ for its heads. The input projection becomes a column-parallel matmul.
@@ -932,23 +932,25 @@ Understanding the naive version is essential because every optimization is a *ta
 
 ### Quick Reference
 
-```
-Multi-Head Attention
-|-- Forward:  O(8BLd^2 + 4BL^2 d) -- projections + attention core
-|-- Backward: O(16BLd^2 + 8BL^2 d) -- ~2x forward (two grads per matmul)
-|-- Memory:   O(BLd + BhL^2) -- intermediates + attention matrices
-|
-|-- Projections: 4 weight matrices, each (d_model, d_model)
-|-- Parameters:  4 * d_model^2 (+ 4 * d_model if biased)
-|
-|-- Key shapes:
-|   |-- After split:  (B, h, L, d_k)
-|   |-- Scores/A:     (B, h, L, L)
-|   |-- After merge:  (B, L, d_model)
-|
-|-- Optimized by:
-    |-- Flash Attention: avoids materializing (B, h, L, L) attention matrix
-    |-- Tensor Parallelism: splits heads across GPUs (Megatron-LM)
-    |-- GQA/MQA: shares K/V heads to reduce KV cache memory
-    |-- KV Cache: reuses K/V from previous tokens during generation
+```mermaid
+graph TD
+    MHA["Multi-Head Attention"]
+
+    MHA --> FWD["Forward: O(8BLd² + 4BL²d)\nprojections + attention core"]
+    MHA --> BWD["Backward: O(16BLd² + 8BL²d)\n~2x forward (two grads per matmul)"]
+    MHA --> MEM["Memory: O(BLd + BhL²)\nintermediates + attention matrices"]
+
+    MHA --> PROJ["Projections: 4 weight matrices\neach (d_model, d_model)"]
+    MHA --> PARAMS["Parameters: 4 * d_model²\n(+ 4 * d_model if biased)"]
+
+    MHA --> SHAPES["Key shapes"]
+    SHAPES --> S1["After split: (B, h, L, d_k)"]
+    SHAPES --> S2["Scores/A: (B, h, L, L)"]
+    SHAPES --> S3["After merge: (B, L, d_model)"]
+
+    MHA --> OPT["Optimized by"]
+    OPT --> FA["Flash Attention:\navoids materializing (B, h, L, L)"]
+    OPT --> TP["Tensor Parallelism:\nsplits heads across GPUs (Megatron-LM)"]
+    OPT --> GQA["GQA/MQA:\nshares K/V heads to reduce KV cache"]
+    OPT --> KVC["KV Cache:\nreuses K/V from previous tokens"]
 ```

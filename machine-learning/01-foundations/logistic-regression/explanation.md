@@ -78,17 +78,23 @@ This is the sigmoid. It is the unique function that converts log-odds to probabi
 
 ### Properties That Matter
 
-```
-          1.0 |                    ___________
-              |                 __/
-              |               _/
-          0.5 |  - - - - - -X- - - - - - - - -
-              |           _/
-              |        __/
-          0.0 |_______/
-              +---------|----------|----------
-                       0.0
-                        z
+```mermaid
+---
+config:
+  themeVariables:
+    xyChart:
+      plotColorPalette: "#4a90d9"
+  xyChart:
+    xAxis:
+      showLabel: true
+    yAxis:
+      showLabel: true
+---
+xychart-beta
+    title "Sigmoid Function σ(z)"
+    x-axis "z" [-6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6]
+    y-axis "σ(z)" 0 --> 1
+    line [0.002, 0.007, 0.018, 0.047, 0.119, 0.269, 0.5, 0.731, 0.881, 0.953, 0.982, 0.993, 0.998]
 ```
 
 Key properties:
@@ -516,17 +522,15 @@ Slope $= -\frac{w_1}{w_2}$, Intercept $= -\frac{b}{w_2}$
 
 ### Visualization Concept
 
-```
-         x2
-          ^
-          |     Class 1 (P > 0.5)
-          |    +  +
-          |  +   +  +
-    ------+-------------- Decision boundary (z = 0)
-          |  o   o
-          | o  o   o
-          |     Class 0 (P < 0.5)
-          +----------------> x1
+```mermaid
+quadrantChart
+    title Decision Boundary (z = 0)
+    x-axis "x1 (low)" --> "x1 (high)"
+    y-axis "x2 (low)" --> "x2 (high)"
+    quadrant-1 "Class 1 (P > 0.5)"
+    quadrant-2 "Class 1 (P > 0.5)"
+    quadrant-3 "Class 0 (P < 0.5)"
+    quadrant-4 "Class 0 (P < 0.5)"
 ```
 
 Points above the line have $z > 0$, so $\sigma(z) > 0.5$, predicted class 1.
@@ -556,15 +560,25 @@ def decision_boundary_params(self) -> Tuple[float, float]:
 
 Logistic regression is literally a single-layer neural network:
 
-```
-        Input Layer          Output Layer
+```mermaid
+flowchart LR
+    x1((x1)) --> N["Neuron<br/>z = Σ wᵢxᵢ + b"]
+    x2((x2)) --> N
+    x3((x3)) --> N
+    N --> S["σ (sigmoid)"]
+    S --> Y((y_pred))
 
-         x1 ----\
-                 \
-         x2 ------[Neuron]---- y_pred
-                 /     |
-         x3 ----/      |
-                    sigmoid
+    subgraph Input Layer
+        x1
+        x2
+        x3
+    end
+
+    subgraph Output Layer
+        N
+        S
+        Y
+    end
 ```
 
 The neuron computes: $z = x_1 w_1 + x_2 w_2 + x_3 w_3 + b$, then applies sigmoid.
@@ -790,32 +804,45 @@ model.fit(X, y)
 
 ### Quick Reference
 
-```
-Logistic Regression
-|-- Forward: O(nd) -- z = Xw + b, y_pred = sigmoid(z)
-|-- Loss: O(n) -- BCE with epsilon clipping
-|-- Backward: O(nd) -- dw = X^T @ (y_pred - y) / n
-|-- Memory: O(nd) -- dominated by input data
-|
-|-- Key insight: sigmoid + BCE => gradient = y_pred - y
-|-- Decision boundary: where Xw + b = 0
-|-- Connection: This IS a 1-layer neural network
+```mermaid
+flowchart TD
+    LR["Logistic Regression"]
+    LR --> FW["Forward: O(nd)<br/>z = Xw + b, y_pred = sigmoid(z)"]
+    LR --> LOSS["Loss: O(n)<br/>BCE with epsilon clipping"]
+    LR --> BW["Backward: O(nd)<br/>dw = Xᵀ @ (y_pred − y) / n"]
+    LR --> MEM["Memory: O(nd)<br/>dominated by input data"]
+    LR --> KI["Key insight:<br/>sigmoid + BCE ⟹ gradient = y_pred − y"]
+    LR --> DB["Decision boundary:<br/>where Xw + b = 0"]
+    LR --> CN["Connection:<br/>This IS a 1-layer neural network"]
 ```
 
 ### Shape Cheat Sheet
 
-```
-Input:   X        (n_samples, n_features)
-Labels:  y        (n_samples,)
-Weights: w        (n_features,)
-Bias:    b        scalar
+```mermaid
+flowchart TD
+    subgraph Inputs
+        X["X: (n_samples, n_features)"]
+        y["y: (n_samples,)"]
+        w["w: (n_features,)"]
+        b["b: scalar"]
+    end
 
-Forward:
-  z = X @ w + b     (n_samples,)
-  y_pred = sig(z)   (n_samples,)
+    subgraph Forward
+        Z["z = X @ w + b → (n_samples,)"]
+        YP["y_pred = σ(z) → (n_samples,)"]
+        X --> Z
+        w --> Z
+        b --> Z
+        Z --> YP
+    end
 
-Backward:
-  error = y_pred - y    (n_samples,)
-  dw = X.T @ error / n  (n_features,)
-  db = mean(error)      scalar
+    subgraph Backward
+        E["error = y_pred − y → (n_samples,)"]
+        DW["dw = Xᵀ @ error / n → (n_features,)"]
+        DB["db = mean(error) → scalar"]
+        YP --> E
+        y --> E
+        E --> DW
+        E --> DB
+    end
 ```

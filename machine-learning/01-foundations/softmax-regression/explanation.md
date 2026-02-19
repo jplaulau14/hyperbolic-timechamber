@@ -52,22 +52,23 @@ But there's a deeper reason. Softmax is the **unique** function that maximizes e
 
 The output of softmax lives on the **probability simplex** — the set of all valid probability distributions. For 3 classes, this is a triangle in 3D space:
 
-```
-        (0, 0, 1)
-           /\
-          /  \
-         /    \
-        /      \
-       /   .P   \
-      /          \
-     /____________\
-(1,0,0)        (0,1,0)
+```mermaid
+graph TD
+    V1["(0, 0, 1)"]
+    V2["(1, 0, 0)"]
+    V3["(0, 1, 0)"]
+    P["P (interior point)"]
 
-The probability simplex for K=3:
+    V1 --- V2
+    V2 --- V3
+    V3 --- V1
+    P -.-|"lies inside simplex"| V1
+```
+
+The probability simplex for $K=3$:
 - Vertices are one-hot vectors (certain predictions)
 - Interior points are uncertain predictions
-- Center (1/3, 1/3, 1/3) is maximum uncertainty
-```
+- Center $(1/3, 1/3, 1/3)$ is maximum uncertainty
 
 Softmax maps any point in $\mathbb{R}^K$ to a point on this simplex. The mapping is smooth and covers the entire interior of the simplex (but never quite reaches the vertices — you'd need infinite logits for that).
 
@@ -698,24 +699,16 @@ output = weights @ V          # (seq, d_v)
 
 The softmax converts raw attention scores into a probability distribution over positions. This is why understanding softmax is essential for understanding attention.
 
-```
-Attention Flow:
+```mermaid
+flowchart LR
+    Q["Q<br/>(seq, d)<br/>query 1<br/>query 2<br/>query 3"]
+    KT["K^T<br/>(d, seq)"]
+    S["Scores<br/>(seq, seq)<br/>2.1  0.5 -0.3<br/>0.3  3.2  1.1<br/>1.1  0.8  2.5"]
+    W["Weights<br/>(seq, seq)<br/>0.6  0.3  0.1<br/>0.1  0.7  0.2<br/>0.2  0.2  0.6<br/><i>each row sums to 1</i>"]
 
-    Q (seq, d)     K^T (d, seq)       Scores (seq, seq)
-    ┌─────────┐    ┌─────────┐        ┌─────────────┐
-    │ query 1 │    │ k k k k │        │ 2.1 0.5 -0.3│
-    │ query 2 │  @ │ e e e e │   =    │ 0.3 3.2 1.1 │
-    │ query 3 │    │ y y y y │        │ 1.1 0.8 2.5 │
-    └─────────┘    └─────────┘        └─────────────┘
-                                             │
-                                        softmax (row-wise)
-                                             │
-                                             ▼
-                                      ┌─────────────┐
-                                      │ 0.6 0.3 0.1 │  <- weights sum to 1
-                                      │ 0.1 0.7 0.2 │
-                                      │ 0.2 0.2 0.6 │
-                                      └─────────────┘
+    Q -->|"@"| S
+    KT -->|"@"| S
+    S -->|"softmax (row-wise)"| W
 ```
 
 ### Output Layer
@@ -763,16 +756,46 @@ Consider $z = [2, 1, 0]$:
 | $T \to 0$ | $[1.0, 0.0, 0.0]$ | Argmax (one-hot) |
 | $T \to \infty$ | $[0.33, 0.33, 0.33]$ | Uniform |
 
+```mermaid
+---
+config:
+  xyChart:
+    width: 300
+    height: 200
+---
+xychart-beta
+    title "T = 0.1 (very sharp)"
+    x-axis ["A", "B", "C"]
+    y-axis 0 --> 1
+    bar [0.95, 0.04, 0.01]
 ```
-Temperature Effect on Distribution:
 
-T = 0.1 (very sharp)    T = 1.0 (normal)      T = 5.0 (soft)
-     ___                     ___                  ___
-    |   |                   |   |                |   |
-    |   |                   |   |_              _|   |_
-    |   |_               ___|   | |_           | |   | |
-____|   | |_         ___|   |   | | |___   ____|_|   | |____
-   A  B  C             A  B  C             A  B  C
+```mermaid
+---
+config:
+  xyChart:
+    width: 300
+    height: 200
+---
+xychart-beta
+    title "T = 1.0 (normal)"
+    x-axis ["A", "B", "C"]
+    y-axis 0 --> 1
+    bar [0.67, 0.24, 0.09]
+```
+
+```mermaid
+---
+config:
+  xyChart:
+    width: 300
+    height: 200
+---
+xychart-beta
+    title "T = 5.0 (soft)"
+    x-axis ["A", "B", "C"]
+    y-axis 0 --> 1
+    bar [0.40, 0.33, 0.27]
 ```
 
 ### Mathematical Intuition
@@ -850,19 +873,19 @@ next_token = np.random.choice(vocab_size, p=probs)
 
 ### Quick Reference
 
-```
-Softmax Regression
-├── Forward: O(n * d * K) — matrix multiply + softmax
-├── Backward: O(n * d * K) — gradient is (P - Y), then matrix multiply
-├── Memory: O(d * K + K) — weights and biases
-└── Key insight: gradient = predictions - targets
-
-Numerical Stability:
-├── Softmax: subtract max before exp
-└── Cross-entropy: clip probabilities before log
-
-Softmax in Transformers:
-├── Attention: softmax(QK^T / sqrt(d_k)) — over positions
-├── Output: softmax(logits) — over vocabulary
-└── Optimization: fused kernels, flash attention, online softmax
+```mermaid
+mindmap
+  root((Softmax Regression))
+    Complexity
+      Forward: $O(n \cdot d \cdot K)$ matrix multiply + softmax
+      Backward: $O(n \cdot d \cdot K)$ gradient is P - Y, then matrix multiply
+      Memory: $O(d \cdot K + K)$ weights and biases
+      Key insight: gradient = predictions - targets
+    Numerical Stability
+      Softmax: subtract max before exp
+      Cross-entropy: clip probabilities before log
+    Softmax in Transformers
+      Attention: $\text{softmax}(QK^T / \sqrt{d_k})$ over positions
+      Output: $\text{softmax}(\text{logits})$ over vocabulary
+      Optimization: fused kernels, flash attention, online softmax
 ```

@@ -34,18 +34,16 @@ Think of a linear layer as a rubber sheet that can only be stretched, compressed
 
 Before diving into each function, it helps to understand why the field kept inventing new activations. This is not academic churn -- each transition solved a concrete training failure mode.
 
-```
-Timeline of Dominance:
+```mermaid
+flowchart LR
+    A["<b>1990s–2012</b><br/>Sigmoid / Tanh"] -->|"Vanishing gradients<br/>in deep nets"| B["<b>2012–2017</b><br/>ReLU / LeakyReLU"]
+    B -->|"Dying neurons,<br/>non-differentiable at zero"| C["<b>2017–present</b><br/>GELU / SiLU"]
+    C -.-|"Smooth, no dead neurons,<br/>non-monotonic, self-gating"| D(( ))
 
-1990s-2012        2012-2017         2017-present
-Sigmoid/Tanh  --> ReLU/LeakyReLU --> GELU/SiLU
-   |                  |                  |
-   |                  |                  |
-   Problem:           Problem:           Why they win:
-   Vanishing          Dying neurons,     Smooth, no dead
-   gradients in       non-differentiable neurons, non-
-   deep nets          at zero            monotonic,
-                                         self-gating
+    style A fill:#f9d0c4,stroke:#e06c60
+    style B fill:#fef3c7,stroke:#f59e0b
+    style C fill:#d1fae5,stroke:#10b981
+    style D fill:none,stroke:none
 ```
 
 **Sigmoid era (1990s-2012):** Sigmoid and tanh were the standard activations. They worked for shallow networks but catastrophically failed in deep ones. The gradient of sigmoid is at most 0.25 (at $x = 0$) and quickly approaches 0 for large $|x|$. Chain ten of these together via backpropagation and the gradient shrinks by a factor of $\sim 0.25^{10} = 9.5 \times 10^{-7}$. The weights in early layers barely update. This is the **vanishing gradient problem**, and it limited practical networks to a few layers for decades.
@@ -291,17 +289,34 @@ Notice the gradient peaks at 0.25 when $x = 0$ and quickly shrinks. At $x = 10$,
 
 ### The Vanishing Gradient Problem Visualized
 
+```mermaid
+---
+config:
+  theme: default
+  themeVariables:
+    xyChart:
+      plotColorPalette: "#4f46e5"
+---
+xychart-beta
+    title "Sigmoid Output — saturates near 0 and 1 for large |x|"
+    x-axis [-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5]
+    y-axis "σ(x)" 0 --> 1.0
+    line [0.007, 0.018, 0.047, 0.119, 0.269, 0.500, 0.731, 0.881, 0.953, 0.982, 0.993]
 ```
-         Sigmoid Output                  Sigmoid Gradient
-    1.0 |          ________            0.25 |       *
-        |        /                          |      * *
-    0.5 |------*-----------            0.12 |     *   *
-        |    /                              |    *     *
-    0.0 |___/                           0.0 |***       ***
-        -5   0   5                          -5   0   5
 
-  Saturates near 0 and 1           Gradient nearly zero for |x| > 3
-  for large |x|                    Chain 10 layers: 0.25^10 ~ 10^-6
+```mermaid
+---
+config:
+  theme: default
+  themeVariables:
+    xyChart:
+      plotColorPalette: "#dc2626"
+---
+xychart-beta
+    title "Sigmoid Gradient — nearly zero for |x| > 3; chain 10 layers: 0.25^10 ≈ 10⁻⁶"
+    x-axis [-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5]
+    y-axis "σ'(x)" 0 --> 0.26
+    line [0.007, 0.018, 0.045, 0.105, 0.197, 0.250, 0.197, 0.105, 0.045, 0.018, 0.007]
 ```
 
 When you backpropagate through many sigmoid layers, these tiny gradients multiply together. After 10 layers, the gradient reaching the first layer is roughly $0.25^{10} \approx 10^{-6}$ of the output gradient. The early layers learn almost nothing. This is why sigmoid is no longer used in hidden layers of deep networks.
@@ -665,36 +680,35 @@ class SiLU(Activation):
 
 LLaMA-family models use SiLU in the **SwiGLU** feedforward network pattern:
 
-```
-Standard FFN (GPT-2 style):
-  FFN(x) = GELU(x @ W1 + b1) @ W2 + b2
+```mermaid
+flowchart LR
+    subgraph standard ["Standard FFN (GPT-2 style)"]
+        direction LR
+        A1["x"] --> B1["x @ W₁ + b₁"] --> C1["GELU"] --> D1["· @ W₂ + b₂"] --> E1["output"]
+    end
 
-SwiGLU FFN (LLaMA style):
-  FFN(x) = (SiLU(x @ W_gate) * (x @ W_up)) @ W_down
+    subgraph swiglu ["SwiGLU FFN (LLaMA style)"]
+        direction LR
+        A2["x"] --> B2["x @ W_gate"]
+        A2 --> B3["x @ W_up"]
+        B2 --> C2["SiLU"]
+        C2 --> D2["⊙ element-wise multiply"]
+        B3 --> D2
+        D2 --> E2["· @ W_down"] --> F2["output"]
+    end
 ```
 
 In SwiGLU, there are two parallel projections from the input: one goes through SiLU (the "gate"), the other passes through unchanged (the "up projection"). They are multiplied element-wise, then projected back down. This gated architecture consistently outperforms the standard FFN in ablation studies, and SiLU's self-gating property complements the explicit gating structure.
 
-```
-SwiGLU Architecture:
-
-     Input x
-       |
-   ----+----
-   |       |
-   v       v
- x @ W_g  x @ W_u       Two parallel linear projections
-   |       |
-   v       |
-  SiLU     |             Gate activated by SiLU
-   |       |
-   +---*---+             Element-wise multiply (gating)
-       |
-       v
-   result @ W_d           Down-project back to model dim
-       |
-       v
-     Output
+```mermaid
+flowchart TD
+    X["Input x"] --> WG["x @ W_gate<br/><i>gate projection</i>"]
+    X --> WU["x @ W_up<br/><i>up projection</i>"]
+    WG --> SILU["SiLU activation"]
+    SILU --> MUL["⊙ Element-wise multiply<br/><i>(gating)</i>"]
+    WU --> MUL
+    MUL --> WD["result @ W_down<br/><i>down-project back to model dim</i>"]
+    WD --> OUT["Output"]
 ```
 
 ---
@@ -777,65 +791,52 @@ This uses **central finite differences**: $f'(x) \approx \frac{f(x+h) - f(x-h)}{
 
 This is where the practical impact of activation choice becomes visible. Consider the gradient magnitude as a function of $x$ for each activation:
 
+```mermaid
+xychart-beta
+    title "ReLU Gradient — dead zone for all x < 0"
+    x-axis [-4, -3, -2, -1, 0, 1, 2, 3, 4]
+    y-axis "grad" 0 --> 1.2
+    line [0, 0, 0, 0, 0, 1, 1, 1, 1]
 ```
-Gradient Magnitude vs. Input Value
 
-ReLU:
-  grad |  1 |         _______________
-       |    |        |
-       |  0 |________|
-       |    +----|----+---->
-       |       -2  0  2     x
-       Dead zone: all x < 0
+```mermaid
+xychart-beta
+    title "Leaky ReLU Gradient (α=0.01) — no dead zone"
+    x-axis [-4, -3, -2, -1, 0, 1, 2, 3, 4]
+    y-axis "grad" 0 --> 1.2
+    line [0.01, 0.01, 0.01, 0.01, 0.01, 1, 1, 1, 1]
+```
 
-Leaky ReLU (alpha=0.01):
-  grad |  1 |         _______________
-       |    |        |
-  0.01 |....|........|                 (small but non-zero)
-       |    +----|----+---->
-       |       -2  0  2     x
-       No dead zone
+```mermaid
+xychart-beta
+    title "Sigmoid Gradient — maximum 0.25, vanishes quickly"
+    x-axis [-4, -3, -2, -1, 0, 1, 2, 3, 4]
+    y-axis "grad" 0 --> 0.3
+    line [0.018, 0.045, 0.105, 0.197, 0.250, 0.197, 0.105, 0.045, 0.018]
+```
 
-Sigmoid:
-  grad | .25|       *
-       |    |      * *
-       | .12|     *   *
-       |    |    *     *
-       |  0 |***       ***
-       |    +----|----+---->
-       |       -2  0  2     x
-       Maximum 0.25, vanishes quickly
+```mermaid
+xychart-beta
+    title "Tanh Gradient — maximum 1.0, 4x better than sigmoid"
+    x-axis [-4, -3, -2, -1, 0, 1, 2, 3, 4]
+    y-axis "grad" 0 --> 1.1
+    line [0.001, 0.010, 0.071, 0.420, 1.000, 0.420, 0.071, 0.010, 0.001]
+```
 
-Tanh:
-  grad |  1 |       *
-       |    |      * *
-       | .5 |     *   *
-       |    |    *     *
-       |  0 |***       ***
-       |    +----|----+---->
-       |       -2  0  2     x
-       Maximum 1.0, 4x better than sigmoid
+```mermaid
+xychart-beta
+    title "GELU Gradient — smooth, slightly exceeds 1.0"
+    x-axis [-4, -3, -2, -1, 0, 1, 2, 3, 4]
+    y-axis "grad" -0.2 --> 1.2
+    line [0.000, -0.004, -0.089, -0.083, 0.500, 1.083, 1.089, 1.004, 1.000]
+```
 
-GELU:
-  grad | 1.1|          *
-       |    |       * *
-       | .5 |      *
-       |    |   *
-       |  0 |  *
-       | -.1| *
-       |    +----|----+---->
-       |       -2  0  2     x
-       Smooth, slightly exceeds 1.0
-
-SiLU:
-  grad | 1.1|           *
-       |  .5|       * *
-       |    |      *
-       |  0 |---*--
-       | -.1|  *
-       |    +----|----+---->
-       |       -2  0  2     x
-       Smooth, non-monotonic, slightly exceeds 1.0
+```mermaid
+xychart-beta
+    title "SiLU Gradient — smooth, non-monotonic, slightly exceeds 1.0"
+    x-axis [-4, -3, -2, -1, 0, 1, 2, 3, 4]
+    y-axis "grad" -0.15 --> 1.15
+    line [-0.054, -0.059, -0.091, -0.072, 0.500, 0.928, 1.091, 1.059, 1.027]
 ```
 
 **What to notice:**
@@ -853,15 +854,13 @@ $$
 
 (product of local gradients)
 
-```
-Activation        Gradient range     After 10 layers
----------------------------------------------------------
-Sigmoid           (0, 0.25]          Worst case: 0.25^10 ~ 10^-6
-Tanh              (0, 1.0]           Worst case: still shrinks
-ReLU              {0, 1}             Binary: either 0 or 1^10 = 1
-GELU              ~(-0.17, 1.08)     Stays near 1 for positive path
-SiLU              ~(-0.10, 1.10)     Stays near 1 for positive path
-```
+| Activation | Gradient range | After 10 layers |
+|-----------|---------------|-----------------|
+| Sigmoid | $(0, 0.25]$ | Worst case: $0.25^{10} \approx 10^{-6}$ |
+| Tanh | $(0, 1.0]$ | Worst case: still shrinks |
+| ReLU | $\{0, 1\}$ | Binary: either $0$ or $1^{10} = 1$ |
+| GELU | $\sim(-0.17, 1.08)$ | Stays near 1 for positive path |
+| SiLU | $\sim(-0.10, 1.10)$ | Stays near 1 for positive path |
 
 ReLU solves vanishing gradients by having gradient exactly 1 in the active region. GELU and SiLU solve it similarly but with smooth transitions, eliminating the dead neuron problem that ReLU introduces.
 
@@ -871,19 +870,15 @@ ReLU solves vanishing gradients by having gradient exactly 1 in the active regio
 
 Every activation class maintains a simple data structure:
 
-```
-Activation instance
-  |
-  +-- _cache: Optional[dict]
-        |
-        +-- None  (before forward, or after reset)
-        |
-        +-- {"x": np.ndarray, ...}  (after forward)
-             |
-             +-- "x"   : copy of input (ReLU, LeakyReLU, GELU, SiLU)
-             +-- "s"   : sigmoid output (Sigmoid, SiLU)
-             +-- "t"   : tanh output (Tanh, GELU approximate)
-             +-- "phi" : Gaussian CDF values (GELU exact)
+```mermaid
+flowchart TD
+    A["Activation instance"] --> B["_cache: Optional[dict]"]
+    B --> C["None<br/><i>(before forward, or after reset)</i>"]
+    B --> D["{&quot;x&quot;: np.ndarray, ...}<br/><i>(after forward)</i>"]
+    D --> E["&quot;x&quot; : copy of input<br/><i>(ReLU, LeakyReLU, GELU, SiLU)</i>"]
+    D --> F["&quot;s&quot; : sigmoid output<br/><i>(Sigmoid, SiLU)</i>"]
+    D --> G["&quot;t&quot; : tanh output<br/><i>(Tanh, GELU approximate)</i>"]
+    D --> H["&quot;phi&quot; : Gaussian CDF values<br/><i>(GELU exact)</i>"]
 ```
 
 **What each activation caches:**
@@ -1060,20 +1055,27 @@ Modern GPUs can do $\sim 300$ TFLOPS but only move $\sim 3$ TB/s. To saturate th
 
 The key insight: if the activation is fused into the preceding matrix multiply, you never write the intermediate tensor to memory at all.
 
+```mermaid
+flowchart TD
+    subgraph unfused ["Unfused — 3 kernel launches, 3 memory round-trips"]
+        direction LR
+        U1["Kernel 1<br/>h = x @ W₁ + b₁<br/><i>Read: x, W₁, b₁ → Write: h</i>"]
+        U2["Kernel 2<br/>h = gelu(h)<br/><i>Read: h → Write: h</i><br/>⚠️ WASTED round-trip"]
+        U3["Kernel 3<br/>out = h @ W₂ + b₂<br/><i>Read: h, W₂, b₂ → Write: out</i>"]
+        U1 --> U2 --> U3
+    end
+
+    subgraph fused ["Fused — 2 kernel launches, 2 memory round-trips"]
+        direction LR
+        F1["Kernel 1<br/>h = gelu(x @ W₁ + b₁)<br/><i>Read: x, W₁, b₁ → Write: h</i>"]
+        F2["Kernel 2<br/>out = h @ W₂ + b₂<br/><i>Read: h, W₂, b₂ → Write: out</i>"]
+        F1 --> F2
+    end
+
+    unfused ~~~ fused
 ```
-Unfused (3 kernel launches, 3 memory round-trips):
 
-  Kernel 1: h = x @ W1 + b1     Read: x, W1, b1    Write: h
-  Kernel 2: h = gelu(h)         Read: h             Write: h    <-- WASTED
-  Kernel 3: out = h @ W2 + b2   Read: h, W2, b2     Write: out
-
-Fused (2 kernel launches, 2 memory round-trips):
-
-  Kernel 1: h = gelu(x @ W1 + b1)   Read: x, W1, b1    Write: h
-  Kernel 2: out = h @ W2 + b2       Read: h, W2, b2     Write: out
-
-Savings: eliminated one full read+write of h (size: batch * seq * hidden)
-```
+**Savings:** eliminated one full read+write of $h$ (size: $\text{batch} \times \text{seq} \times \text{hidden}$).
 
 For a typical transformer layer with hidden dim 4096 and $\text{batch} \times \text{seq} = 65536$, the intermediate tensor $h$ is $65536 \times 4096 \times 4 \text{ bytes} = 1 \text{ GB}$ (in float32). Eliminating one round-trip of this tensor at 3 TB/s bandwidth saves $\sim 0.33$ ms. Across all layers and all forward passes, this adds up.
 
@@ -1114,16 +1116,26 @@ Understanding the naive NumPy version -- the exact formula, the derivative, the 
 
 For LLaMA-style models, the fusion opportunity is even richer:
 
-```
-Unfused SwiGLU (4 kernels):
-  gate = x @ W_gate           # GEMM
-  gate = silu(gate)            # Activation
-  up   = x @ W_up             # GEMM
-  h    = gate * up             # Element-wise multiply
+```mermaid
+flowchart TD
+    subgraph unfused_swiglu ["Unfused SwiGLU — 4 kernels"]
+        direction LR
+        S1["gate = x @ W_gate<br/><i>GEMM</i>"]
+        S2["gate = silu(gate)<br/><i>Activation</i>"]
+        S3["up = x @ W_up<br/><i>GEMM</i>"]
+        S4["h = gate ⊙ up<br/><i>Element-wise multiply</i>"]
+        S1 --> S2 --> S4
+        S3 --> S4
+    end
 
-Fused SwiGLU (2 kernels or even 1):
-  gate, up = fused_dual_gemm(x, W_gate, W_up)   # Two GEMMs, one read of x
-  h = silu(gate) * up                            # Fused activation + multiply
+    subgraph fused_swiglu ["Fused SwiGLU — 2 kernels (or even 1)"]
+        direction LR
+        F1["gate, up = fused_dual_gemm(x, W_gate, W_up)<br/><i>Two GEMMs, one read of x</i>"]
+        F2["h = silu(gate) ⊙ up<br/><i>Fused activation + multiply</i>"]
+        F1 --> F2
+    end
+
+    unfused_swiglu ~~~ fused_swiglu
 ```
 
 The SiLU activation and the element-wise multiply are fused into a single kernel, eliminating two memory round-trips.
@@ -1166,40 +1178,19 @@ The SiLU activation and the element-wise multiply are fused into a single kernel
 
 ### Quick Reference
 
-```
-Activation Functions
-|
-+-- ReLU:        max(0, x)
-|   Forward:  O(n) -- comparison + copy
-|   Backward: O(n) -- mask multiply
-|   Gradient: {0, 1} -- binary, dead zone for x <= 0
-|
-+-- LeakyReLU:   max(alpha*x, x)
-|   Forward:  O(n) -- comparison + multiply
-|   Backward: O(n) -- mask multiply
-|   Gradient: {alpha, 1} -- no dead zone
-|
-+-- Sigmoid:     1 / (1 + exp(-x))
-|   Forward:  O(n) -- exp per element
-|   Backward: O(n) -- s * (1 - s), reuses cached s
-|   Gradient: (0, 0.25] -- vanishes for large |x|
-|
-+-- Tanh:        (exp(x) - exp(-x)) / (exp(x) + exp(-x))
-|   Forward:  O(n) -- exp per element
-|   Backward: O(n) -- 1 - t^2, reuses cached t
-|   Gradient: (0, 1.0] -- vanishes for large |x|, 4x better than sigmoid
-|
-+-- GELU:        x * Phi(x) ~ 0.5 * x * (1 + tanh(c * (x + 0.044715 * x^3)))
-|   Forward:  O(n) -- cubic + tanh per element
-|   Backward: O(n) -- product rule with sech^2
-|   Gradient: ~(-0.17, 1.08) -- smooth, non-monotonic
-|   Used by:  GPT-2, GPT-3, BERT
-|
-+-- SiLU/Swish:  x * sigmoid(x)
-    Forward:  O(n) -- exp per element
-    Backward: O(n) -- s * (1 + x * (1 - s)), reuses cached s
-    Gradient: ~(-0.10, 1.10) -- smooth, non-monotonic, self-gating
-    Used by:  LLaMA, Mistral, Gemma (in SwiGLU FFN)
+```mermaid
+flowchart TD
+    ROOT["<b>Activation Functions</b><br/><i>Optimized by: GEMM epilogue fusion (cuBLAS, Triton), half-precision compute</i>"]
 
-Optimized by: GEMM epilogue fusion (cuBLAS, Triton), half-precision compute
+    ROOT --- RELU["<b>ReLU</b>: max(0, x)<br/>Forward: O(n) — comparison + copy<br/>Backward: O(n) — mask multiply<br/>Gradient: {0, 1} — binary, dead zone for x ≤ 0"]
+
+    ROOT --- LRELU["<b>LeakyReLU</b>: max(αx, x)<br/>Forward: O(n) — comparison + multiply<br/>Backward: O(n) — mask multiply<br/>Gradient: {α, 1} — no dead zone"]
+
+    ROOT --- SIG["<b>Sigmoid</b>: 1 / (1 + exp(−x))<br/>Forward: O(n) — exp per element<br/>Backward: O(n) — s·(1−s), reuses cached s<br/>Gradient: (0, 0.25] — vanishes for large |x|"]
+
+    ROOT --- TAN["<b>Tanh</b>: (eˣ − e⁻ˣ) / (eˣ + e⁻ˣ)<br/>Forward: O(n) — exp per element<br/>Backward: O(n) — 1−t², reuses cached t<br/>Gradient: (0, 1.0] — vanishes for large |x|, 4x better than sigmoid"]
+
+    ROOT --- GELU["<b>GELU</b>: x·Φ(x) ≈ 0.5·x·(1 + tanh(c·(x + 0.044715·x³)))<br/>Forward: O(n) — cubic + tanh per element<br/>Backward: O(n) — product rule with sech²<br/>Gradient: ≈(−0.17, 1.08) — smooth, non-monotonic<br/>Used by: GPT-2, GPT-3, BERT"]
+
+    ROOT --- SILU["<b>SiLU / Swish</b>: x·σ(x)<br/>Forward: O(n) — exp per element<br/>Backward: O(n) — s·(1 + x·(1−s)), reuses cached s<br/>Gradient: ≈(−0.10, 1.10) — smooth, non-monotonic, self-gating<br/>Used by: LLaMA, Mistral, Gemma (in SwiGLU FFN)"]
 ```

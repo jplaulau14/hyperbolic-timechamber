@@ -157,18 +157,18 @@ for some relationship between $C$ and $\lambda$. The constraint region defines t
 
 For L2, the constraint $\|w\|_2 \leq C$ is a **ball** (circle in 2D, sphere in 3D, hypersphere in higher dimensions):
 
-```
-         L2 constraint region (2D)
+```mermaid
+graph TD
+    Shape["⬤ Smooth Circle<br/>‖w‖₂ ≤ C"]
+    Origin["Origin O at center"]
+    Prop1["No corners or edges"]
+    Prop2["Tangent point can land<br/>anywhere on the boundary"]
+    Prop3["No bias toward axes"]
 
-              . . .
-          .           .
-        .               .
-       .                 .
-       .        O        .      O = origin
-       .                 .
-        .               .
-          .           .
-              . . .
+    Shape --- Origin
+    Shape --- Prop1
+    Prop1 --- Prop2
+    Prop2 --- Prop3
 ```
 
 The loss function has elliptical contours. The optimal constrained solution is where an elliptical contour *just touches* the ball. Because the ball is smooth and round, this tangent point can happen anywhere -- there is no reason for it to land on an axis.
@@ -177,50 +177,51 @@ The loss function has elliptical contours. The optimal constrained solution is w
 
 For L1, the constraint $\|w\|_1 \leq C$ is a **diamond** (rotated square in 2D, cross-polytope in higher dimensions):
 
-```
-         L1 constraint region (2D)
+```mermaid
+graph TD
+    Shape["◆ Diamond Shape<br/>‖w‖₁ ≤ C"]
+    Origin["Origin O at center"]
+    Prop1["Corners sit on the axes<br/>(w₁ axis and w₂ axis)"]
+    Prop2["Flat edges between corners"]
+    Prop3["Loss contours almost always<br/>touch at a corner first"]
+    Prop4["At a corner, one or more<br/>coordinates are exactly zero"]
 
-              .
-            / | \
-          /   |   \
-        /     |     \
-       .------O------.       O = origin
-        \     |     /
-          \   |   /
-            \ | /
-              .
+    Shape --- Origin
+    Shape --- Prop1
+    Prop1 --- Prop2
+    Prop2 --- Prop3
+    Prop3 --- Prop4
 ```
 
 The diamond has **corners on the axes**. When an elliptical loss contour approaches this shape, it is far more likely to touch at a corner than along a flat edge. At a corner, one or more coordinates are exactly zero. In higher dimensions, the diamond has exponentially more corners relative to its surface area, making axis-aligned contact even more probable.
 
 ### Why This Matters in 2D
 
-```
-     w2
-      |
-      |       Loss contours (ellipses)
-      |      .----.
-      |     /      \             L2 ball
-      |    |   *    |          .---.
-      |     \      /         /     \
-      |      '----'         |   O   |
-      |                      \     /
-      +--------*-------------'---'---------> w1
-               ^                   tangent point is NOT on axis
-               optimal w1 is non-zero
+```mermaid
+graph LR
+    subgraph L2_Case["L2: Loss Contour Meets Ball"]
+        direction TB
+        L2_Loss["Elliptical loss contours<br/>centered at unconstrained optimum *"]
+        L2_Constraint["Smooth circular<br/>constraint region"]
+        L2_Tangent["Tangent point is NOT on an axis"]
+        L2_Result["Both w₁ and w₂ are non-zero"]
 
-     w2
-      |
-      |       Loss contours (ellipses)
-      |      .----.
-      |     /      \          L1 diamond
-      |    |   *    |         /\
-      |     \      /         /  \
-      |      '----'         O    .
-      |                      \  /
-      +--------*--------------\/-----------> w1
-               ^              tangent hits the CORNER
-               optimal w1 IS zero, w2 IS zero
+        L2_Loss --> L2_Constraint
+        L2_Constraint --> L2_Tangent
+        L2_Tangent --> L2_Result
+    end
+
+    subgraph L1_Case["L1: Loss Contour Meets Diamond"]
+        direction TB
+        L1_Loss["Elliptical loss contours<br/>centered at unconstrained optimum *"]
+        L1_Constraint["Diamond-shaped<br/>constraint region"]
+        L1_Tangent["Tangent hits a CORNER on an axis"]
+        L1_Result["At least one of w₁, w₂<br/>is exactly zero → sparsity"]
+
+        L1_Loss --> L1_Constraint
+        L1_Constraint --> L1_Tangent
+        L1_Tangent --> L1_Result
+    end
 ```
 
 The loss contour almost always first touches the L1 diamond at one of its corners. At a corner, at least one coordinate is zero. This is the geometric reason L1 produces sparsity.
@@ -730,13 +731,17 @@ self.w -= self.learning_rate * dw
 
 L1 regularization produces sparse weight matrices where many weights are exactly zero. This connects directly to model compression for inference:
 
-```
-Dense weight matrix (unpruned):      Sparse weight matrix (L1-trained):
-[0.5  0.3  0.1  0.4]                [0.5  0.0  0.0  0.4]
-[0.2  0.6  0.3  0.1]                [0.0  0.6  0.0  0.0]
-[0.1  0.2  0.7  0.3]                [0.0  0.0  0.7  0.3]
+```mermaid
+graph LR
+    subgraph Dense["Dense Matrix (Unpruned)"]
+        D["[0.5, 0.3, 0.1, 0.4]<br/>[0.2, 0.6, 0.3, 0.1]<br/>[0.1, 0.2, 0.7, 0.3]<br/><br/>12 multiplications"]
+    end
 
-12 multiplications                   5 multiplications (58% reduction)
+    Dense -- "L1 regularization<br/>drives noise weights to 0" --> Sparse
+
+    subgraph Sparse["Sparse Matrix (L1-Trained)"]
+        S["[0.5, 0.0, 0.0, 0.4]<br/>[0.0, 0.6, 0.0, 0.0]<br/>[0.0, 0.0, 0.7, 0.3]<br/><br/>5 multiplications (58% reduction)"]
+    end
 ```
 
 Modern inference engines exploit sparsity in several ways:
@@ -827,38 +832,48 @@ Compare convergence speed to the subgradient method.
 
 ### Quick Reference
 
-```
-Regularization
-|
-+-- L2 (Ridge)
-|   +-- Penalty:  (lambda/2) * sum(w_i^2)
-|   +-- Gradient: lambda * w
-|   +-- Effect:   Smooth shrinkage, no exact zeros
-|   +-- Closed-form: w = (X^T X + n*lambda*I)^{-1} X^T y
-|
-+-- L1 (Lasso)
-|   +-- Penalty:  lambda * sum(|w_i|)
-|   +-- Gradient: lambda * sign(w)
-|   +-- Effect:   Sparsity, drives weights to exactly zero
-|   +-- No closed-form solution
-|
-+-- Elastic Net (L1 + L2)
-|   +-- Penalty:  lambda * (rho * ||w||_1 + (1-rho)/2 * ||w||_2^2)
-|   +-- Gradient: lambda * (rho * sign(w) + (1-rho) * w)
-|   +-- Effect:   Sparsity + stability
-|
-+-- Weight Decay
-    +-- SGD: equivalent to L2 regularization
-    +-- Adam: NOT equivalent -- use AdamW (decoupled weight decay)
-    +-- Every modern LLM uses AdamW with weight_decay ~ 0.1
+```mermaid
+graph TD
+    Root["Regularization"]
 
-Complexity (all penalty/gradient functions):
-  Time:  O(d)  -- single pass over weights
-  Space: O(d)  -- gradient same size as weights
+    Root --> L2
+    Root --> L1
+    Root --> EN
+    Root --> WD
 
-Complexity (regularized regression training):
-  GD:          O(T * n * d) time, O(n + d) space
-  Closed-form: O(n*d^2 + d^3) time, O(d^2) space
+    subgraph L2["L2 (Ridge)"]
+        L2P["Penalty: (λ/2) · Σ wᵢ²"]
+        L2G["Gradient: λw"]
+        L2E["Effect: Smooth shrinkage, no exact zeros"]
+        L2C["Closed-form: w = (XᵀX + nλI)⁻¹ Xᵀy"]
+    end
 
-Optimized by: pruning, sparse kernels, N:M sparsity, AdamW
+    subgraph L1["L1 (Lasso)"]
+        L1P["Penalty: λ · Σ|wᵢ|"]
+        L1G["Gradient: λ · sign(w)"]
+        L1E["Effect: Sparsity, drives weights to exactly zero"]
+        L1C["No closed-form solution"]
+    end
+
+    subgraph EN["Elastic Net (L1 + L2)"]
+        ENP["Penalty: λ(ρ‖w‖₁ + (1−ρ)/2 · ‖w‖₂²)"]
+        ENG["Gradient: λ(ρ · sign(w) + (1−ρ) · w)"]
+        ENE["Effect: Sparsity + stability"]
+    end
+
+    subgraph WD["Weight Decay"]
+        WD1["SGD: equivalent to L2 regularization"]
+        WD2["Adam: NOT equivalent — use AdamW"]
+        WD3["Every modern LLM uses AdamW<br/>with weight_decay ≈ 0.1"]
+    end
+
+    Root --> CX
+
+    subgraph CX["Complexity"]
+        CX1["Penalty/gradient functions:<br/>Time O(d), Space O(d)"]
+        CX2["GD training:<br/>Time O(T·n·d), Space O(n+d)"]
+        CX3["Closed-form:<br/>Time O(nd² + d³), Space O(d²)"]
+    end
+
+    Root --> OPT["Optimized by: pruning, sparse kernels,<br/>N:M sparsity, AdamW"]
 ```

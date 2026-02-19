@@ -124,8 +124,8 @@ $$\mathbb{E}[\hat{m}_t] = \frac{\mathbb{E}[m_t]}{1 - \beta_1^t} = \mathbb{E}[g]$
 
 **Concrete impact at step 1** (with $\beta_1 = 0.9$, $\beta_2 = 0.999$):
 
-- $m_1 = 0.1 \cdot g_1$ (10x too small). Correction: $\hat{m}_1 = m_1 / 0.1 = g_1$.
-- $v_1 = 0.001 \cdot g_1^2$ (1000x too small). Correction: $\hat{v}_1 = v_1 / 0.001 = g_1^2$.
+- $m_1 = 0.1 \cdot g_1$ ($10\times$ too small). Correction: $\hat{m}_1 = m_1 / 0.1 = g_1$.
+- $v_1 = 0.001 \cdot g_1^2$ ($1000\times$ too small). Correction: $\hat{v}_1 = v_1 / 0.001 = g_1^2$.
 
 Without correction at step 1, $\sqrt{\hat{v}_1}$ would be too small, making the effective learning rate too large, potentially causing divergence. The second moment is especially dangerous because $\beta_2 = 0.999$ means the bias persists for $\sim 1000$ steps.
 
@@ -133,7 +133,7 @@ Without correction at step 1, $\sqrt{\hat{v}_1}$ would be too small, making the 
 
 | Step $t$ | $1 - \beta_1^t$ | $1 - \beta_2^t$ | Correction significant? |
 |----------|-----------------|-----------------|------------------------|
-| 1        | $0.1$           | $0.001$         | Yes -- 10x and 1000x correction |
+| 1        | $0.1$           | $0.001$         | Yes -- $10\times$ and $1000\times$ correction |
 | 10       | $0.651$         | $0.010$         | Yes -- both still far from 1 |
 | 100      | $1.0$           | $0.095$         | $\beta_1$ done, $\beta_2$ still correcting |
 | 1000     | $1.0$           | $0.632$         | $\beta_2$ moderate correction |
@@ -276,20 +276,21 @@ This is what GPT-3, LLaMA, Chinchilla, and nearly every large language model use
 - $\alpha_{\max}$: $3 \times 10^{-4}$ (common for LLMs)
 - $\alpha_{\min}$: $\alpha_{\max} / 10$ or $0$
 
+```mermaid
+---
+config:
+    themeVariables:
+        xyChart:
+            titleColor: "#333"
+---
+xychart-beta
+    title "Learning Rate Schedule (Warmup + Cosine Decay)"
+    x-axis "Training Step" [0, "warmup", "mid", "T"]
+    y-axis "Learning Rate" ["alpha_min", "alpha_max"]
+    line [0, 1, 0.85, 0.5, 0.15, 0]
 ```
-Learning rate over training:
 
-alpha_max |       xxxxxxx
-          |     xx       xxxx
-          |    x             xxxx
-          |   x                  xxxx
-          |  x                       xxxxx
-          | x                             xxxxxxx
-alpha_min |x                                     xxxxxxxxxx
-          +---|----|------|-------|--------|------|----------> step
-          0  warmup               mid                   T
-              ^---- linear ----^---- cosine decay ------^
-```
+The schedule ramps linearly from $0$ to $\alpha_{\max}$ during warmup, then follows a cosine curve down to $\alpha_{\min}$ over the remaining steps.
 
 ---
 
@@ -583,17 +584,32 @@ Optimizers do not run during inference. Once training is complete, the model wei
 
 The optimizer determines what the final weights look like. AdamW with proper weight decay produces weights with bounded magnitudes and smooth distributions. When you quantize these weights (int8, int4) for inference, the weight distribution directly determines quantization error.
 
+```mermaid
+---
+config:
+    themeVariables:
+        xyChart:
+            titleColor: "#333"
+---
+xychart-beta
+    title "AdamW (lambda=0.1): Symmetric, Bounded"
+    x-axis "Weight Value (w)" [-0.5, -0.3, -0.1, 0, 0.1, 0.3, 0.5]
+    y-axis "Density"
+    line [0.05, 0.3, 0.8, 1.0, 0.8, 0.3, 0.05]
 ```
-Weight distribution from AdamW (lambda=0.1):     Weight distribution from Adam+L2:
-    |                                                  |
-    |     xxxxxxxx                                     |   xxxxxxxxx
-    |   xx        xx                                   |  x          xxx
-    |  x            x                                  | x              xxx
-    | x              x                                 |x                  xxx
-    |x                x                                x                      x
-    +-------|---------|----> w                          +-------|---------|----> w
-          -0.5      0.5                                      -0.5      0.5
-    (symmetric, bounded)                               (skewed, longer tail)
+
+```mermaid
+---
+config:
+    themeVariables:
+        xyChart:
+            titleColor: "#333"
+---
+xychart-beta
+    title "Adam+L2: Skewed, Longer Tail"
+    x-axis "Weight Value (w)" [-0.5, -0.3, -0.1, 0, 0.1, 0.3, 0.5, 0.7, 0.9]
+    y-axis "Density"
+    line [0.05, 0.3, 0.9, 1.0, 0.7, 0.4, 0.2, 0.1, 0.03]
 ```
 
 Tighter, more symmetric weight distributions quantize better -- the dynamic range fits neatly into fewer bits.
@@ -674,36 +690,31 @@ Understanding our naive implementation is essential because the optimized versio
 
 ### Quick Reference
 
-```
-Optimizers
-├── SGD
-│   ├── Update: theta -= lr * grad
-│   ├── State: 0 per parameter
-│   └── Use when: Simple problems, debugging
-│
-├── SGD + Momentum
-│   ├── Update: v = beta*v + g; theta -= lr*v
-│   ├── State: 1 buffer per parameter (velocity)
-│   └── Use when: Vision models (sometimes), SGD converges but slowly
-│
-├── Adam
-│   ├── Update: theta -= lr * m_hat / (sqrt(v_hat) + eps)
-│   ├── State: 2 buffers per parameter (m, v) + 1 int (step)
-│   └── Use when: Default for most deep learning
-│
-└── AdamW
-    ├── Update: theta -= lr * (m_hat / (sqrt(v_hat) + eps) + lambda * theta)
-    ├── State: 2 buffers per parameter (m, v) + 1 int (step)
-    └── Use when: ALWAYS for LLM training. Default choice.
+```mermaid
+graph TD
+    OPT["Optimizers"]
 
-Memory overhead (7B model, fp32):
-├── SGD:          0 GB extra state
-├── SGD+Momentum: 28 GB extra state
-└── Adam/AdamW:   56 GB extra state
+    SGD["<b>SGD</b><br/>Update: θ -= lr · g<br/>State: 0 per parameter<br/>Use when: Simple problems, debugging"]
+    MOM["<b>SGD + Momentum</b><br/>Update: v = βv + g; θ -= lr·v<br/>State: 1 buffer per parameter (velocity)<br/>Use when: Vision models, slow SGD convergence"]
+    ADAM["<b>Adam</b><br/>Update: θ -= lr · m̂ / (√v̂ + ε)<br/>State: 2 buffers per parameter (m, v) + 1 int (step)<br/>Use when: Default for most deep learning"]
+    ADAMW["<b>AdamW</b><br/>Update: θ -= lr · (m̂ / (√v̂ + ε) + λθ)<br/>State: 2 buffers per parameter (m, v) + 1 int (step)<br/>Use when: ALWAYS for LLM training"]
 
-LLM standard: AdamW + warmup cosine schedule
-├── lr = 3e-4, beta1 = 0.9, beta2 = 0.95
-├── weight_decay = 0.1, eps = 1e-8
-├── warmup = ~2000 steps
-└── cosine decay to lr/10 or 0
+    OPT --> SGD
+    OPT --> MOM
+    OPT --> ADAM
+    OPT --> ADAMW
+
+    MEM["<b>Memory Overhead (7B model, fp32)</b>"]
+    MEM_SGD["SGD: 0 GB extra state"]
+    MEM_MOM["SGD+Momentum: 28 GB extra state"]
+    MEM_ADAM["Adam/AdamW: 56 GB extra state"]
+
+    MEM --> MEM_SGD
+    MEM --> MEM_MOM
+    MEM --> MEM_ADAM
+
+    LLM["<b>LLM Standard: AdamW + Warmup Cosine Schedule</b>"]
+    LLM_HP["lr = 3e-4, β₁ = 0.9, β₂ = 0.95<br/>weight_decay = 0.1, ε = 1e-8<br/>warmup ≈ 2000 steps<br/>cosine decay to lr/10 or 0"]
+
+    LLM --> LLM_HP
 ```

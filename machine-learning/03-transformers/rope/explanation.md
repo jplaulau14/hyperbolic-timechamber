@@ -205,66 +205,76 @@ def test_dot_product_invariance(self):
 
 ### 2D Rotation of a Single Dimension Pair
 
+```mermaid
+graph LR
+    subgraph "2D Rotation of Dimension Pair i"
+        direction TB
+        A["Original vector<br/>(x₂ᵢ, x₂ᵢ₊₁)"] -- "Rotate by angle<br/>m · θᵢ" --> B["Rotated vector<br/>(x'₂ᵢ, x'₂ᵢ₊₁)"]
+    end
+    style A fill:#e8f4fd,stroke:#333
+    style B fill:#d4edda,stroke:#333
 ```
-           y (x_{2i+1})
-           ^
-           |         . (x'_{2i}, x'_{2i+1})
-           |       /
-           |     /  angle = m * theta_i
-           |   /
-           | /____________. (x_{2i}, x_{2i+1})
-           |
-    -------+-----------------------> x (x_{2i})
-           |
-           |  The vector is rotated counterclockwise
-           |  by angle m * theta_i.
-           |  Its length (norm) is preserved.
-```
+
+The vector is rotated counterclockwise by angle $m \cdot \theta_i$. Its length (norm) is preserved.
 
 ### Dimension Pairing Structure
 
-```
-Head dimension d = 8:
+```mermaid
+graph TD
+    V["Head dimension d = 8:<br/>[ x₀, x₁, x₂, x₃, x₄, x₅, x₆, x₇ ]"]
 
-  [ x_0, x_1, x_2, x_3, x_4, x_5, x_6, x_7 ]
-    \___/      \___/      \___/      \___/
-   pair 0     pair 1     pair 2     pair 3
-  theta_0    theta_1    theta_2    theta_3
-   FAST        |          |        SLOW
-   rotation    |          |        rotation
-               v          v
-         medium speed   medium speed
+    V --> P0["Pair 0: (x₀, x₁)<br/>θ₀ — FAST rotation"]
+    V --> P1["Pair 1: (x₂, x₃)<br/>θ₁ — medium speed"]
+    V --> P2["Pair 2: (x₄, x₅)<br/>θ₂ — medium speed"]
+    V --> P3["Pair 3: (x₆, x₇)<br/>θ₃ — SLOW rotation"]
+
+    style P0 fill:#ff9999,stroke:#333
+    style P1 fill:#ffcc99,stroke:#333
+    style P2 fill:#ffcc99,stroke:#333
+    style P3 fill:#99ccff,stroke:#333
 ```
 
 ### Frequency Spectrum
 
-```
-Dimension pair     theta_i (base=10000, d=128)    Wavelength
-    0              1.0                              ~6.3 positions
-    16             0.1                              ~63 positions
-    32             0.01                             ~628 positions
-    48             0.001                            ~6,283 positions
-    63             ~0.0001                          ~62,832 positions
+```mermaid
+graph LR
+    subgraph "Frequency Spectrum (base=10000, d=128)"
+        direction TB
+        H["Low indices → High frequency<br/>Captures local position"]
+        L["High indices → Low frequency<br/>Captures global position"]
 
-Low indices -----> high frequency, captures local position
-High indices ----> low frequency, captures global position
+        D0["Pair 0: θ = 1.0<br/>Wavelength ≈ 6.3 positions"]
+        D16["Pair 16: θ = 0.1<br/>Wavelength ≈ 63 positions"]
+        D32["Pair 32: θ = 0.01<br/>Wavelength ≈ 628 positions"]
+        D48["Pair 48: θ = 0.001<br/>Wavelength ≈ 6,283 positions"]
+        D63["Pair 63: θ ≈ 0.0001<br/>Wavelength ≈ 62,832 positions"]
+
+        H --> D0 --> D16 --> D32 --> D48 --> D63 --> L
+    end
+
+    style H fill:#ff9999,stroke:#333
+    style L fill:#99ccff,stroke:#333
 ```
 
 ### Before vs After RoPE Application
 
-```
-Before RoPE (position has no effect):
+```mermaid
+graph TD
+    subgraph Before["Before RoPE (position has no effect)"]
+        B1["Q at pos 5: [0.3, -0.7, 1.2, 0.4, ...]<br/>content only"]
+        B2["Q at pos 100: [0.3, -0.7, 1.2, 0.4, ...]<br/>same content = same Q"]
+    end
 
-  Q at pos 5:   [0.3, -0.7, 1.2, 0.4, ...]     content only
-  Q at pos 100: [0.3, -0.7, 1.2, 0.4, ...]     same content = same Q
+    subgraph After["After RoPE (position is baked in)"]
+        A1["Q at pos 5: [0.8, -0.2, 1.2, 0.4, ...]<br/>rotated by 5 · θ"]
+        A2["Q at pos 100: [-0.6, 0.5, 1.1, 0.6, ...]<br/>rotated by 100 · θ"]
+    end
 
-After RoPE (position is baked in):
+    After --> Result["Different positions → different rotations → different dot products<br/>But: dot(Q'₅, K'₃) == dot(Q'₁₀₅, K'₁₀₃) — same relative distance 2"]
 
-  Q at pos 5:   [0.8, -0.2, 1.2, 0.4, ...]     rotated by 5 * theta
-  Q at pos 100: [-0.6, 0.5, 1.1, 0.6, ...]     rotated by 100 * theta
-
-  Different positions --> different rotations --> different dot products
-  But: dot(Q'_5, K'_3) == dot(Q'_105, K'_103)   (same relative distance 2)
+    style Before fill:#ffe6e6,stroke:#333
+    style After fill:#e6ffe6,stroke:#333
+    style Result fill:#fff3cd,stroke:#333
 ```
 
 ---
@@ -634,27 +644,28 @@ $$Q'_m \cdot K'_n = (R(m) Q_m)^\top (R(n) K_n) = Q_m^\top R(n-m) K_n$$
 
 The relative position $(n - m)$ is automatically encoded. No recomputation of cached keys is needed.
 
-```
-RoPE in the Attention Pipeline with KV Cache:
+```mermaid
+flowchart TD
+    Input["New token at position m"]
 
-   New token at position m
-           |
-     X_m @ W_Q = Q_m              X_m @ W_K = K_m
-           |                            |
-     R(m) * Q_m = Q'_m            R(m) * K_m = K'_m  --> append to KV cache
-           |                            |
-           |                  KV Cache: [K'_0, K'_1, ..., K'_{m-1}, K'_m]
-           |                            |
-           +----------+  +--------------+
-                      |  |
-                 Q'_m @ [K'_0, ..., K'_m]^T  / sqrt(d)
-                      |
-                   softmax
-                      |
-                   output
+    Input --> QProj["X_m @ W_Q = Q_m"]
+    Input --> KProj["X_m @ W_K = K_m"]
 
-   Key point: K'_0 through K'_{m-1} were computed and cached
-   in previous steps. They are NEVER recomputed.
+    QProj --> QRot["R(m) · Q_m = Q'_m"]
+    KProj --> KRot["R(m) · K_m = K'_m"]
+
+    KRot --> Cache["KV Cache:<br/>[K'₀, K'₁, ..., K'ₘ₋₁, K'ₘ]"]
+
+    QRot --> DotProduct["Q'_m @ [K'₀, ..., K'ₘ]ᵀ / √d"]
+    Cache --> DotProduct
+
+    DotProduct --> Softmax["softmax"]
+    Softmax --> Output["output"]
+
+    Note["K'₀ through K'ₘ₋₁ were computed and cached<br/>in previous steps. They are NEVER recomputed."]
+
+    style Cache fill:#fff3cd,stroke:#333
+    style Note fill:#f0f0f0,stroke:#999,stroke-dasharray: 5 5
 ```
 
 ### Context Length Extension
@@ -769,33 +780,36 @@ def test_position_zero_passthrough(self):
 
 ### Quick Reference
 
-```
-Rotary Position Embeddings (RoPE)
-|-- Precompute: O(L_max * d) -- cos/sin cache, done once
-|-- Forward:    O(B * H * L * d) -- element-wise rotation of Q and K
-|-- Backward:   O(B * H * L * d) -- inverse rotation (transpose of orthogonal matrix)
-|-- Memory:     O(L_max * d) cache + O(B * H * L * d) working
-|
-|-- Key property: dot(RoPE(q,m), RoPE(k,n)) = f(q, k, m-n)
-|   Only relative position matters.
-|
-|-- Frequency schedule: theta_i = base^{-2i/d}
-|   |-- base = 10000 (LLaMA 1/2), 500000 (LLaMA 3)
-|   |-- Low i: fast rotation (local position)
-|   |-- High i: slow rotation (global position)
-|
-|-- Integration with attention:
-|   |-- Applied AFTER Q/K projection, BEFORE dot product
-|   |-- V is NOT rotated
-|   |-- KV cache stores ROTATED keys (position baked in)
-|   |-- GQA-compatible: applied per head independently
-|
-|-- vs Sinusoidal PE:
-|   |-- Same frequencies, different application
-|   |-- Additive vs multiplicative
-|   |-- Approximate vs exact relative position
-|   |-- Applied once vs at every layer
-|
-|-- Optimized by: kernel fusion with Q/K projection
-|   Context extension via theta scaling (NTK-aware, YaRN)
+```mermaid
+graph TD
+    RoPE["Rotary Position Embeddings — RoPE"]
+
+    RoPE --> Complexity["Complexity"]
+    Complexity --> Pre["Precompute: O(L_max · d)<br/>cos/sin cache, done once"]
+    Complexity --> Fwd["Forward: O(B · H · L · d)<br/>element-wise rotation of Q and K"]
+    Complexity --> Bwd["Backward: O(B · H · L · d)<br/>inverse rotation (transpose of orthogonal matrix)"]
+    Complexity --> Mem["Memory: O(L_max · d) cache<br/>+ O(B · H · L · d) working"]
+
+    RoPE --> KeyProp["Key property:<br/>dot(RoPE(q,m), RoPE(k,n)) = f(q, k, m−n)<br/>Only relative position matters"]
+
+    RoPE --> Freq["Frequency schedule:<br/>θᵢ = base^(−2i/d)"]
+    Freq --> Base["base = 10000 (LLaMA 1/2)<br/>base = 500000 (LLaMA 3)"]
+    Freq --> LowI["Low i: fast rotation<br/>(local position)"]
+    Freq --> HighI["High i: slow rotation<br/>(global position)"]
+
+    RoPE --> Attn["Integration with attention"]
+    Attn --> A1["Applied AFTER Q/K projection,<br/>BEFORE dot product"]
+    Attn --> A2["V is NOT rotated"]
+    Attn --> A3["KV cache stores ROTATED keys<br/>(position baked in)"]
+    Attn --> A4["GQA-compatible:<br/>applied per head independently"]
+
+    RoPE --> VsPE["vs Sinusoidal PE"]
+    VsPE --> V1["Same frequencies,<br/>different application"]
+    VsPE --> V2["Additive vs multiplicative"]
+    VsPE --> V3["Approximate vs exact<br/>relative position"]
+    VsPE --> V4["Applied once vs<br/>at every layer"]
+
+    RoPE --> Opt["Optimized by"]
+    Opt --> O1["Kernel fusion with<br/>Q/K projection"]
+    Opt --> O2["Context extension via<br/>theta scaling (NTK-aware, YaRN)"]
 ```

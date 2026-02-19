@@ -8,18 +8,12 @@ Imagine you are a real estate agent trying to predict house prices. You notice t
 
 This is the essence of linear regression: **finding the best straight line through your data**.
 
-```
-Price ($)
-    ^
-400k|                              *
-    |                         *
-300k|                    *   *
-    |               *  *
-200k|          *  *
-    |      * *
-100k|   *
-    |________________________> Square Feet
-        1000  1500  2000  2500
+```mermaid
+xychart-beta
+    title "House Price vs Square Footage"
+    x-axis "Square Feet" [1000, 1250, 1500, 1750, 2000, 2250, 2500]
+    y-axis "Price ($)" 50000 --> 450000
+    line [100000, 140000, 200000, 220000, 260000, 310000, 400000]
 ```
 
 You want to find: $\text{price} = w \cdot \text{square\_feet} + b$
@@ -406,16 +400,12 @@ model.fit(X, y)
 
 **Why it is wrong:** The gradient tells you the direction to move, but a huge step can overshoot the minimum completely. The loss oscillates and diverges.
 
-```
-Loss
-  ^
-  |    *
-  |   / \
-  |  /   \  *
-  | *     \/  \
-  |           * \
-  +-------------->  iterations
-      (diverging)
+```mermaid
+xychart-beta
+    title "Diverging Loss (Learning Rate Too High)"
+    x-axis "Iterations" [1, 2, 3, 4, 5, 6]
+    y-axis "Loss" 0 --> 1600
+    line [1.5, 15.2, 152.8, 300, 800, 1528]
 ```
 
 **The fix:**
@@ -491,23 +481,20 @@ def predict(self, X):
 
 The training loop you implemented here is identical to what runs in GPT-4:
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                     TRAINING LOOP                           │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐ │
-│  │ FORWARD  │ → │   LOSS   │ → │ BACKWARD │ → │  UPDATE  │ │
-│  │   PASS   │   │          │   │   PASS   │   │          │ │
-│  └──────────┘   └──────────┘   └──────────┘   └──────────┘ │
-│                                                             │
-│  Linear Reg:    MSE          Manual         SGD            │
-│  y = Xw + b                  gradients      w -= lr * dw   │
-│                                                             │
-│  Transformer:   Cross-       Automatic      AdamW          │
-│  100+ layers    Entropy      Differentiation + schedulers  │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+    subgraph TRAINING_LOOP["TRAINING LOOP"]
+        direction LR
+        FP["FORWARD\nPASS"] --> LOSS["LOSS"] --> BP["BACKWARD\nPASS"] --> UP["UPDATE"]
+    end
+
+    subgraph legend["Comparison"]
+        direction TB
+        LR_row["Linear Reg: y = Xw + b | MSE | Manual gradients | SGD (w -= lr * dw)"]
+        TR_row["Transformer: 100+ layers | Cross-Entropy | Automatic Differentiation | AdamW + schedulers"]
+    end
+
+    TRAINING_LOOP ~~~ legend
 ```
 
 ### What Changes in Neural Networks

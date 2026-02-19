@@ -828,7 +828,7 @@ def example_5_attention_impact():
     print("Example 5: Impact on Attention Patterns")
     print("=" * 60)
 
-    d = 16
+    d = 64
     seq_len = 12
     num_heads = 1
     batch_size = 1
@@ -836,18 +836,18 @@ def example_5_attention_impact():
     rope = RoPE(d, seq_len + 10)
 
     np.random.seed(SEED)
-    W_Q = np.random.randn(d, d) * 0.1
-    W_K = np.random.randn(d, d) * 0.1
 
-    # Create input: ALL IDENTICAL token embeddings to isolate positional effects
+    # Use IDENTITY projections so Q=K=X and RoPE is the ONLY source of score variation.
+    # With learned W_Q/W_K scaled by 0.1, the RoPE effect is too subtle to see visually.
     token_embed = np.random.randn(d)
     X = np.tile(token_embed, (batch_size, seq_len, 1))
 
     print(f"\n  Config: d={d}, seq_len={seq_len}")
     print(f"  All tokens have IDENTICAL embeddings to isolate position effects")
+    print(f"  Using identity Q/K projections so RoPE is the ONLY source of variation")
 
-    Q = (X @ W_Q).reshape(batch_size, seq_len, num_heads, d).transpose(0, 2, 1, 3)
-    K = (X @ W_K).reshape(batch_size, seq_len, num_heads, d).transpose(0, 2, 1, 3)
+    Q = X.reshape(batch_size, seq_len, num_heads, d).transpose(0, 2, 1, 3)
+    K = X.reshape(batch_size, seq_len, num_heads, d).transpose(0, 2, 1, 3)
     scale = np.sqrt(d)
 
     # Causal mask
@@ -886,8 +886,8 @@ def example_5_attention_impact():
     # Shift test: shift input, attention pattern should shift correspondingly
     shift = 3
     X_shifted = np.tile(token_embed, (batch_size, seq_len, 1))
-    Q_shifted = (X_shifted @ W_Q).reshape(batch_size, seq_len, num_heads, d).transpose(0, 2, 1, 3)
-    K_shifted = (X_shifted @ W_K).reshape(batch_size, seq_len, num_heads, d).transpose(0, 2, 1, 3)
+    Q_shifted = X_shifted.reshape(batch_size, seq_len, num_heads, d).transpose(0, 2, 1, 3)
+    K_shifted = X_shifted.reshape(batch_size, seq_len, num_heads, d).transpose(0, 2, 1, 3)
 
     shifted_positions = np.arange(shift, shift + seq_len)
     Q_rot_shifted = apply_rope(Q_shifted, rope.cos_cache, rope.sin_cache, shifted_positions)
@@ -908,30 +908,48 @@ def example_5_attention_impact():
     fig, axes = plt.subplots(2, 3, figsize=(18, 11))
     cmap = LinearSegmentedColormap.from_list("attn", ["white", "#3498db", "#1a1a2e"])
 
-    # Top-left: attention without RoPE
-    im0 = axes[0, 0].imshow(attn_no_rope[0, 0], cmap=cmap, aspect="equal",
-                              interpolation="nearest", vmin=0)
+    # Per-row normalization to make within-row variation visible.
+    # Raw attention is dominated by the causal mask staircase (1/1, 1/2, 1/3, ...),
+    # hiding the subtle within-row differences that RoPE introduces.
+    def normalize_per_row(attn_matrix):
+        normed = attn_matrix.copy()
+        for i in range(normed.shape[0]):
+            row = normed[i, :i+1]
+            rmin, rmax = row.min(), row.max()
+            if rmax - rmin > 1e-12:
+                normed[i, :i+1] = (row - rmin) / (rmax - rmin)
+            else:
+                normed[i, :i+1] = 0.5
+        return normed
+
+    normed_no_rope = normalize_per_row(attn_no_rope[0, 0])
+    normed_rope = normalize_per_row(attn_rope[0, 0])
+    normed_shifted = normalize_per_row(attn_shifted[0, 0])
+
+    # Top-left: attention without RoPE (per-row normalized)
+    im0 = axes[0, 0].imshow(normed_no_rope, cmap=cmap, aspect="equal",
+                              interpolation="nearest", vmin=0, vmax=1)
     axes[0, 0].set_xlabel("Key Position")
     axes[0, 0].set_ylabel("Query Position")
-    axes[0, 0].set_title("WITHOUT RoPE (identical tokens)\nUniform attention within causal mask",
+    axes[0, 0].set_title("WITHOUT RoPE (per-row normalized)\nAll rows uniform (gray = 0.5 everywhere)",
                           fontsize=10, fontweight="bold")
     fig.colorbar(im0, ax=axes[0, 0], fraction=0.046, pad=0.04)
 
-    # Top-middle: attention with RoPE
-    im1 = axes[0, 1].imshow(attn_rope[0, 0], cmap=cmap, aspect="equal",
-                              interpolation="nearest", vmin=0)
+    # Top-middle: attention with RoPE (per-row normalized)
+    im1 = axes[0, 1].imshow(normed_rope, cmap=cmap, aspect="equal",
+                              interpolation="nearest", vmin=0, vmax=1)
     axes[0, 1].set_xlabel("Key Position")
     axes[0, 1].set_ylabel("Query Position")
-    axes[0, 1].set_title("WITH RoPE (identical tokens)\nPosition-dependent: weights vary by relative position",
+    axes[0, 1].set_title("WITH RoPE (per-row normalized)\nClear position-dependent variation within each row",
                           fontsize=10, fontweight="bold")
     fig.colorbar(im1, ax=axes[0, 1], fraction=0.046, pad=0.04)
 
-    # Top-right: shifted attention
-    im2 = axes[0, 2].imshow(attn_shifted[0, 0], cmap=cmap, aspect="equal",
-                              interpolation="nearest", vmin=0)
+    # Top-right: shifted attention (per-row normalized)
+    im2 = axes[0, 2].imshow(normed_shifted, cmap=cmap, aspect="equal",
+                              interpolation="nearest", vmin=0, vmax=1)
     axes[0, 2].set_xlabel("Key Position")
     axes[0, 2].set_ylabel("Query Position")
-    axes[0, 2].set_title(f"WITH RoPE (shifted by {shift})\n"
+    axes[0, 2].set_title(f"WITH RoPE shifted by {shift} (per-row normalized)\n"
                           f"||diff from unshifted|| = {shift_diff:.2e} (identical)",
                           fontsize=10, fontweight="bold")
     fig.colorbar(im2, ax=axes[0, 2], fraction=0.046, pad=0.04)

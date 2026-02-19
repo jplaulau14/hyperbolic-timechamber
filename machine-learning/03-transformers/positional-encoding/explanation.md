@@ -136,29 +136,36 @@ def test_position_zero(self):
 
 ### Visualizing the Frequency Structure
 
-```
-Position     dim 0 (sin, w=1.0)     dim 2 (sin, w=0.01)
-  0          |                      |
-  1          |========              |
-  2          |=========             |
-  3          |=====                 |
-  4          |                      |
-  5          |                      |=
-  6          |                      |=
-  ...        (period ~ 6.3)         (period ~ 628)
-             ^^ fast oscillation    ^^ barely changes
+```mermaid
+block-beta
+    columns 3
+    block:header:3
+        columns 3
+        h1["Position"] h2["dim 0 (sin, ω=1.0)"] h3["dim 2 (sin, ω=0.01)"]
+    end
+    block:desc:3
+        columns 3
+        d1["0–6"] d2["Rapid oscillation\nperiod ≈ 6.3 positions"] d3["Barely changes\nperiod ≈ 628 positions"]
+    end
 ```
 
-```
-Frequency spectrum across dimension pairs:
+```mermaid
+graph LR
+    subgraph Frequency Spectrum Across Dimension Pairs
+        direction TB
+        A["dim pair 0: ω = 1.0\nwavelength = 2π ≈ 6.3 positions"]
+        B["dim pair 1: ω = 0.01\nwavelength ≈ 628 positions"]
+        C["..."]
+        D["dim pair d/2−1: ω ≈ 0.0001\nwavelength ≈ 62,832 positions"]
+    end
+    A --> B --> C --> D
+    style A fill:#ff9999,stroke:#333
+    style D fill:#9999ff,stroke:#333
 
-dim pair 0:  omega = 1.0       wavelength = 2*pi ~ 6.3 positions
-dim pair 1:  omega = 0.01      wavelength = 628 positions
-   ...
-dim pair d/2-1: omega ~ 0.0001  wavelength ~ 62,832 positions
-
-Low dims -----> fast oscillation, local position info
-High dims ----> slow oscillation, global position info
+    E["Low dims → fast oscillation, local position info"]
+    F["High dims → slow oscillation, global position info"]
+    A -.- E
+    D -.- F
 ```
 
 ### Norm Verification
@@ -195,25 +202,28 @@ $$M_k = \text{diag}(R_0(k), R_1(k), \ldots, R_{d_{model}/2-1}(k))$$
 
 ### Visualizing the Block-Diagonal Structure
 
+```mermaid
+graph TD
+    subgraph "M_k (d_model × d_model) — Block-Diagonal Rotation Matrix"
+        direction TB
+        R0["R_0(k)"]
+        R1["R_1(k)"]
+        R2["R_2(k)"]
+        dots["⋱"]
+        Rn["R_{d/2−1}(k)"]
+    end
+    subgraph "Each R_i(k) is a 2×2 rotation matrix"
+        rot["cos(ω_i·k)   sin(ω_i·k)\n−sin(ω_i·k)  cos(ω_i·k)"]
+    end
+    R0 --- R1 --- R2 --- dots --- Rn
+    style R0 fill:#e6f3ff,stroke:#333
+    style R1 fill:#e6f3ff,stroke:#333
+    style R2 fill:#e6f3ff,stroke:#333
+    style Rn fill:#e6f3ff,stroke:#333
+    style rot fill:#fff3e6,stroke:#333
 ```
-M_k (d_model x d_model):
 
-+-------+-------+-------+-------+-------+
-| R_0(k)|   0   |   0   |  ...  |   0   |
-+-------+-------+-------+-------+-------+
-|   0   | R_1(k)|   0   |  ...  |   0   |
-+-------+-------+-------+-------+-------+
-|   0   |   0   | R_2(k)|  ...  |   0   |
-+-------+-------+-------+-------+-------+
-|  ...  |  ...  |  ...  |  ...  |  ...  |
-+-------+-------+-------+-------+-------+
-|   0   |   0   |   0   |  ...  |R_{d/2-1}(k)|
-+-------+-------+-------+-------+-------+
-
-Each R_i(k) is a 2x2 rotation:
-[ cos(w_i*k)   sin(w_i*k) ]
-[ -sin(w_i*k)  cos(w_i*k) ]
-```
+All off-diagonal blocks are zero. The matrix $M_k$ is block-diagonal: each $2 \times 2$ rotation block $R_i(k)$ acts independently on its corresponding (sin, cos) dimension pair.
 
 ### Numerical Verification
 
@@ -281,18 +291,13 @@ The diagonal of the dot product matrix is $PE_{pos}^\top PE_{pos} = d_{model}/2$
 
 The dot product matrix $D$ has approximate Toeplitz structure: the value at $(i, j)$ depends mainly on $|i - j|$. This means the PE vectors are organized so that the "similarity" between positions is a function of distance, which is exactly what the model needs to learn position-dependent attention patterns.
 
-```
-D (dot product matrix, L=8, d_model=64):
-
-          pos 0   pos 1   pos 2   pos 3   ...
-pos 0   [ 32.0    31.2    29.1    26.0   ... ]
-pos 1   [ 31.2    32.0    31.2    29.1   ... ]
-pos 2   [ 29.1    31.2    32.0    31.2   ... ]
-pos 3   [ 26.0    29.1    31.2    32.0   ... ]
-  ...      ...     ...     ...     ...
-
-Each diagonal has the same value (Toeplitz property).
-Diagonal = d_model/2 = 32. Off-diagonals decrease with distance.
+```mermaid
+graph TD
+    subgraph "D (dot product matrix, L=8, d_model=64) — Toeplitz Structure"
+        M["pos 0: [ 32.0  31.2  29.1  26.0  ... ]\npos 1: [ 31.2  32.0  31.2  29.1  ... ]\npos 2: [ 29.1  31.2  32.0  31.2  ... ]\npos 3: [ 26.0  29.1  31.2  32.0  ... ]\n  ..."]
+    end
+    N["Each diagonal has the same value (Toeplitz property).\nDiagonal = d_model/2 = 32.\nOff-diagonals decrease with distance."]
+    M --> N
 ```
 
 ---
@@ -454,10 +459,12 @@ Both sinusoidal and learned encodings are *absolute* -- they encode the position
 
 RoPE (Topic 13) solves both by rotating $Q$ and $K$ vectors by position-dependent angles so that the dot product $q_i^\top k_j$ depends only on relative distance $i - j$. The progression:
 
-```
-2017  Sinusoidal absolute     Good math properties, limited extrapolation
-2018  Learned absolute        More expressive, no extrapolation
-2023+ RoPE (relative)         Direct relative position, better extrapolation
+```mermaid
+graph LR
+    A["2017: Sinusoidal Absolute\nGood math properties,\nlimited extrapolation"] --> B["2018: Learned Absolute\nMore expressive,\nno extrapolation"] --> C["2023+: RoPE (Relative)\nDirect relative position,\nbetter extrapolation"]
+    style A fill:#ffe6e6,stroke:#333
+    style B fill:#fff3e6,stroke:#333
+    style C fill:#e6ffe6,stroke:#333
 ```
 
 ---
@@ -489,8 +496,9 @@ Positional encoding is computationally trivial compared to attention and feed-fo
 
 PE is roughly 1000x cheaper than a single attention layer. In optimized inference engines, the PE addition is typically fused with the token embedding lookup into a single kernel:
 
-```
-token_ids --> embedding_table[token_ids] + PE[:L] --> X'
+```mermaid
+graph LR
+    A["token_ids"] --> B["embedding_table[token_ids] + PE[:L]"] --> C["X'"]
 ```
 
 One kernel, one memory pass, negligible cost.
@@ -607,19 +615,19 @@ def test_gradient_accumulation_across_batch(self):
 
 If you plotted the PE matrix as a heatmap (rows = positions, columns = dimensions), you would see:
 
-```
-     dim 0  dim 1  dim 2  dim 3  ...  dim d-2  dim d-1
-     (sin)  (cos)  (sin)  (cos)       (sin)    (cos)
-pos 0  [  0    1.0    0    1.0   ...    0       1.0   ]
-pos 1  [rapid oscillation         ...  barely changing ]
-pos 2  [   |    |     |    |     ...    |        |    ]
-pos 3  [   v    v     |    |     ...    |        |    ]
-  ...  [              v    v     ...    |        |    ]
-  ...  [                         ...    v        v    ]
-pos L  [                         ...                  ]
-
-Left columns:   rapid vertical stripes (high frequency)
-Right columns:  smooth vertical gradients (low frequency)
+```mermaid
+graph TD
+    subgraph "PE Matrix Heatmap (rows = positions, columns = dimensions)"
+        direction LR
+        LEFT["Left columns (dim 0, 1, 2, 3, ...)\n— sin/cos at HIGH frequency —\nRapid vertical stripes\nValues alternate quickly\nacross positions"]
+        RIGHT["Right columns (..., dim d−2, dim d−1)\n— sin/cos at LOW frequency —\nSmooth vertical gradients\nValues change slowly\nacross positions"]
+    end
+    P0["pos 0: always [0, 1, 0, 1, ..., 0, 1]"]
+    LEFT --- RIGHT
+    P0 --> LEFT
+    style LEFT fill:#ff9999,stroke:#333
+    style RIGHT fill:#9999ff,stroke:#333
+    style P0 fill:#ffffcc,stroke:#333
 ```
 
 The leftmost columns show rapid alternation between positive and negative values (short wavelength). Moving right, the pattern becomes smoother -- gradual transitions that take hundreds of positions to complete one cycle. This multi-scale structure is what gives each position a unique "fingerprint."
@@ -718,30 +726,32 @@ Returns per-position norms (all equal to $\sqrt{d_{model}/2}$), per-dimension me
 
 ### Quick Reference
 
-```
-Positional Encoding
-|-- Sinusoidal (Fixed)
-|   |-- Generate: O(L * d_model) -- compute sin/cos for angle matrix
-|   |-- Forward:  O(B * L * d_model) -- elementwise add, broadcast over batch
-|   |-- Memory:   O(L_max * d_model) -- precomputed buffer
-|   |-- Params:   0
-|   |-- Extrapolation: Yes (formula works for any position)
-|
-|-- Learned (Trainable)
-|   |-- Forward:  O(B * L * d_model) -- index select + add
-|   |-- Backward: O(B * L * d_model) -- sum gradients across batch
-|   |-- Memory:   O(L_max * d_model) -- embedding table
-|   |-- Params:   L_max * d_model
-|   |-- Extrapolation: No (bounded by L_max)
-|
-|-- Mathematical Properties (Sinusoidal):
-|   |-- Values bounded in [-1, 1]
-|   |-- Position norms: sqrt(d_model / 2) for all positions
-|   |-- Relative position: PE[pos+k] = M_k @ PE[pos] (rotation)
-|   |-- Dot product: PE_i . PE_j depends only on |i - j|
-|
-|-- Superseded by: RoPE (rotary position embeddings)
-|   |-- Encodes relative position directly in Q @ K^T
-|   |-- Better length extrapolation
-|   |-- Used in LLaMA, Mistral, Phi, and all modern LLMs
+```mermaid
+graph TD
+    PE["Positional Encoding"]
+    PE --> SIN["Sinusoidal (Fixed)"]
+    PE --> LRN["Learned (Trainable)"]
+    PE --> MATH["Mathematical Properties\n(Sinusoidal)"]
+    PE --> ROPE["Superseded by: RoPE\n(Rotary Position Embeddings)"]
+
+    SIN --> S1["Generate: O(L × d_model)\ncompute sin/cos for angle matrix"]
+    SIN --> S2["Forward: O(B × L × d_model)\nelementwise add, broadcast over batch"]
+    SIN --> S3["Memory: O(L_max × d_model)\nprecomputed buffer"]
+    SIN --> S4["Params: 0"]
+    SIN --> S5["Extrapolation: Yes\nformula works for any position"]
+
+    LRN --> L1["Forward: O(B × L × d_model)\nindex select + add"]
+    LRN --> L2["Backward: O(B × L × d_model)\nsum gradients across batch"]
+    LRN --> L3["Memory: O(L_max × d_model)\nembedding table"]
+    LRN --> L4["Params: L_max × d_model"]
+    LRN --> L5["Extrapolation: No\nbounded by L_max"]
+
+    MATH --> M1["Values bounded in [−1, 1]"]
+    MATH --> M2["Position norms: √(d_model / 2)\nfor all positions"]
+    MATH --> M3["Relative position:\nPE[pos+k] = M_k @ PE[pos] (rotation)"]
+    MATH --> M4["Dot product:\nPE_i · PE_j depends only on |i − j|"]
+
+    ROPE --> R1["Encodes relative position\ndirectly in Q @ Kᵀ"]
+    ROPE --> R2["Better length extrapolation"]
+    ROPE --> R3["Used in LLaMA, Mistral, Phi,\nand all modern LLMs"]
 ```

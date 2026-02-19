@@ -405,8 +405,8 @@ LayerNorm's two forward reductions are *sequential*: you cannot compute the vari
 |---|---|---|
 | Mean subtraction ($x - \mu$) | Yes | No |
 | Addition ($+\beta$) | Yes | No |
-| Total ops per element (forward) | ~6 | ~4 |
-| Total ops per element (backward) | ~10 | ~6 |
+| Total ops per element (forward) | $\sim 6$ | $\sim 4$ |
+| Total ops per element (backward) | $\sim 10$ | $\sim 6$ |
 
 ### 3. Fewer Parameters, Less Memory Traffic
 
@@ -421,10 +421,10 @@ For a single normalization over $D = 4096$ at one sequence position:
 | Read $x$ | 16 KB | 16 KB | 0 |
 | Read params | 32 KB ($\gamma + \beta$) | 16 KB ($\gamma$ only) | 16 KB |
 | Write output | 16 KB | 16 KB | 0 |
-| Compute | ~8D FLOPs | ~5D FLOPs | ~37% |
-| Reductions (fwd+bwd) | 4 | 2 | 50% |
+| Compute | $\sim 8D$ FLOPs | $\sim 5D$ FLOPs | $\sim 37\%$ |
+| Reductions (fwd+bwd) | 4 | 2 | $50\%$ |
 
-In practice, benchmarks show RMSNorm is 10-30% faster than LayerNorm in fused CUDA kernels.
+In practice, benchmarks show RMSNorm is $10\text{--}30\%$ faster than LayerNorm in fused CUDA kernels.
 
 ---
 
@@ -530,24 +530,31 @@ $$x_1 = x + \text{Attention}(\text{LayerNorm}(x))$$
 
 $$x_2 = x_1 + \text{FFN}(\text{LayerNorm}(x_1))$$
 
-```
-Post-Norm                          Pre-Norm
+```mermaid
+graph TD
+    subgraph Post-Norm
+        A1[x] --> A2[Attention]
+        A1 --> A3((+))
+        A2 --> A3
+        A3 --> A4[LayerNorm]
+        A4 --> A5[FFN]
+        A4 --> A6((+))
+        A5 --> A6
+        A6 --> A7[LayerNorm]
+        A7 --> A8[output]
+    end
 
-    x                                  x
-    |                                  |
-    +---> Attention                    +---> LayerNorm
-    |         |                        |         |
-    +-----(+)                          |     Attention
-          |                            |         |
-      LayerNorm                        +-----(+)
-          |                                   |
-          +---> FFN                           +---> LayerNorm
-          |      |                            |         |
-          +---(+)                             |       FFN
-               |                              |         |
-           LayerNorm                          +-----(+)
-               |                                     |
-            output                                output
+    subgraph Pre-Norm
+        B1[x] --> B2[LayerNorm]
+        B2 --> B3[Attention]
+        B1 --> B4((+))
+        B3 --> B4
+        B4 --> B5[LayerNorm]
+        B5 --> B6[FFN]
+        B4 --> B7((+))
+        B6 --> B7
+        B7 --> B8[output]
+    end
 ```
 
 ### Why Pre-norm Wins for Deep Networks
@@ -616,16 +623,23 @@ With BatchNorm, each sample's output depends on the other samples in the batch. 
 
 They normalize within each sample independently, use only that sample's own statistics, and behave identically at training and inference time. No running averages, no batch dependence, no special inference mode. This is why the implementation has no `training` flag and no running statistics -- there is nothing to switch between.
 
-```
-BatchNorm: statistics across batch          LayerNorm: statistics across features
-(breaks with batch size 1)                  (works with any batch size)
+```mermaid
+graph LR
+    subgraph BatchNorm["BatchNorm: statistics across batch (breaks with batch size 1)"]
+        direction TB
+        S1["Sample 1: [a1, a2, a3, a4]"]
+        S2["Sample 2: [b1, b2, b3, b4]"]
+        S3["Sample 3: [c1, c2, c3, c4]"]
+        S1 --> MU["mu_1 ... mu_4 (across samples)"]
+        S2 --> MU
+        S3 --> MU
+    end
 
-Sample 1: [a1, a2, a3, a4]                 Sample 1: [a1, a2, a3, a4]
-Sample 2: [b1, b2, b3, b4]                              |___ mu, var ___|
-Sample 3: [c1, c2, c3, c4]
-           |               |                Sample 2: [b1, b2, b3, b4]
-         mu_1 ... mu_4     |                              |___ mu, var ___|
-         (across samples)
+    subgraph LayerNorm["LayerNorm: statistics across features (works with any batch size)"]
+        direction TB
+        L1["Sample 1: [a1, a2, a3, a4]"] --> M1["mu, var (across features)"]
+        L2["Sample 2: [b1, b2, b3, b4]"] --> M2["mu, var (across features)"]
+    end
 ```
 
 ---
@@ -657,7 +671,7 @@ For $\sigma^2 = 0$ (all inputs identical):
 | Inside: $1/\sqrt{0 + 10^{-5}}$ | $= 1/\sqrt{10^{-5}} = 1/0.00316 \approx 316.2$ |
 | Outside: $1/(\sqrt{0} + 10^{-5})$ | $= 1/10^{-5} = 100{,}000$ |
 
-The outside version produces a normalization factor **316x too large**, which blows up the normalized values and injects enormous gradients.
+The outside version produces a normalization factor **$316\times$ too large**, which blows up the normalized values and injects enormous gradients.
 
 For small $\sigma^2 = 10^{-10}$:
 
@@ -688,7 +702,7 @@ $$\mu^2 = (1000000.5)^2 \approx 1.000001000 \times 10^{12}$$
 
 $$\sigma^2 = E[x^2] - \mu^2 = 0.25$$
 
-In exact arithmetic this works. But in float64 with ~15 significant digits, the subtraction $10^{12} - 10^{12}$ loses nearly all precision. In float32 (7 significant digits), the result can be *negative* due to rounding -- and taking the square root of a negative number gives NaN.
+In exact arithmetic this works. But in float64 with $\sim 15$ significant digits, the subtraction $10^{12} - 10^{12}$ loses nearly all precision. In float32 ($7$ significant digits), the result can be *negative* due to rounding -- and taking the square root of a negative number gives NaN.
 
 This is why the implementation computes `var = np.mean(x_centered ** 2, ...)` (subtract the mean first, then square), not `np.mean(x**2, ...) - mu**2`.
 
@@ -704,7 +718,7 @@ This is why the implementation computes `var = np.mean(x_centered ** 2, ...)` (s
 | Backward ($dx$) | $O(B \cdot L \cdot D)$ | $O(B \cdot L \cdot D)$ | Two reductions (LN) or one (RMS), each over $D$ elements, plus elementwise ops |
 | Backward ($d\gamma$, $d\beta$) | $O(B \cdot L \cdot D)$ | $O(B \cdot L \cdot D)$ | Sum over batch/sequence dimensions |
 
-Both are $O(N)$ where $N = B \cdot L \cdot D$ is the total number of elements. No matrix multiplications, no quadratic operations. The difference is in the constant factor: LayerNorm does ~8 operations per element in the forward pass, RMSNorm ~5.
+Both are $O(N)$ where $N = B \cdot L \cdot D$ is the total number of elements. No matrix multiplications, no quadratic operations. The difference is in the constant factor: LayerNorm does $\sim 8$ operations per element in the forward pass, RMSNorm $\sim 5$.
 
 ### Space Complexity
 
@@ -727,11 +741,11 @@ Normalization is **memory-bandwidth-bound**, not compute-bound. For hidden dimen
 | Read $\gamma$, $\beta$ | $2D \times 4 = 32$ KB |
 | Write output $y$ | $D \times 4 = 16$ KB |
 | **Total memory** | **64 KB** |
-| **Total compute** | **~$8D = 32$K FLOPs** |
+| **Total compute** | **$\sim 8D = 32\text{K FLOPs}$** |
 
 $$\text{Arithmetic intensity} = \frac{32\text{K FLOPs}}{64\text{ KB}} = 0.5 \text{ FLOPs/byte}$$
 
-An A100 GPU has a compute-to-bandwidth ratio of $312 \text{ TFLOPS} / 2 \text{ TB/s} = 156 \text{ FLOPs/byte}$. Normalization at 0.5 FLOPs/byte is **312x below the ridge point**. The GPU's arithmetic units are idle >99% of the time, waiting for data to move from HBM to registers. The only way to speed this up is to reduce memory traffic -- which is exactly what kernel fusion does.
+An A100 GPU has a compute-to-bandwidth ratio of $312 \text{ TFLOPS} / 2 \text{ TB/s} = 156 \text{ FLOPs/byte}$. Normalization at $0.5$ FLOPs/byte is **$312\times$ below the ridge point**. The GPU's arithmetic units are idle $>99\%$ of the time, waiting for data to move from HBM to registers. The only way to speed this up is to reduce memory traffic -- which is exactly what kernel fusion does.
 
 ---
 
@@ -745,7 +759,7 @@ An A100 GPU has a compute-to-bandwidth ratio of $312 \text{ TFLOPS} / 2 \text{ T
 std_inv = 1.0 / (np.sqrt(var) + eps)
 ```
 
-**Why it is wrong:** When `var = 0`, `np.sqrt(0)` produces 0, and `1/(0 + 1e-5)` = 100,000. The correct value is `1/sqrt(1e-5)` = 316.2. The error is a factor of 316x, which produces enormous normalized values and exploding gradients.
+**Why it is wrong:** When `var = 0`, `np.sqrt(0)` produces 0, and $1/(0 + 10^{-5}) = 100{,}000$. The correct value is $1/\sqrt{10^{-5}} = 316.2$. The error is a factor of $316\times$, which produces enormous normalized values and exploding gradients.
 
 **The fix:**
 ```python
@@ -813,23 +827,26 @@ self.grad_gamma = np.sum(grad_output * x_hat, axis=sum_axes)  # shape (D,)
 
 ### What Gets Optimized
 
-Normalization is purely **memory-bandwidth-bound**. At ~0.5 FLOPs/byte, the GPU spends almost all its time moving data between HBM and compute units, not actually computing. This makes normalization a primary target for kernel fusion: combining it with adjacent operations so intermediate tensors never touch global memory.
+Normalization is purely **memory-bandwidth-bound**. At $\sim 0.5$ FLOPs/byte, the GPU spends almost all its time moving data between HBM and compute units, not actually computing. This makes normalization a primary target for kernel fusion: combining it with adjacent operations so intermediate tensors never touch global memory.
 
 ### Kernel Fusion in Practice
 
 The key insight: if normalization is preceded by a residual addition and followed by a linear projection, we can fuse operations so that intermediate tensors stay in registers.
 
-```
-Without fusion (3 kernel launches):
-    residual    = x + attn_output           # read 2 tensors, write 1
-    normalized  = rmsnorm(residual, gamma)   # read 2 tensors, write 1
-    projected   = normalized @ W_q           # read 2 tensors, write 1
-    Total: 6 tensor reads + 3 tensor writes = 9 global memory accesses
+```mermaid
+graph TD
+    subgraph Without["Without fusion (3 kernel launches, 9 global memory accesses)"]
+        direction LR
+        W1["x, attn_output"] -->|"read 2, write 1"| W2["residual = x + attn_output"]
+        W2 -->|"read 2, write 1"| W3["normalized = rmsnorm(residual, gamma)"]
+        W3 -->|"read 2, write 1"| W4["projected = normalized @ W_q"]
+    end
 
-With fusion (2 kernel launches):
-    res_normed = fused_add_rmsnorm(x, attn_output, gamma)   # read 3, write 1
-    projected  = res_normed @ W_q                             # read 2, write 1
-    Total: 5 tensor reads + 2 tensor writes = 7 global memory accesses
+    subgraph With["With fusion (2 kernel launches, 7 global memory accesses)"]
+        direction LR
+        F1["x, attn_output, gamma"] -->|"read 3, write 1"| F2["res_normed = fused_add_rmsnorm(...)"]
+        F2 -->|"read 2, write 1"| F3["projected = res_normed @ W_q"]
+    end
 ```
 
 The fused kernel reads $x$, `attn_output`, and $\gamma$ once, computes the residual addition and RMSNorm entirely in registers/shared memory, and writes only the final result. Two full tensor trips through global memory are eliminated.
@@ -862,7 +879,7 @@ $$\text{Memory traffic per norm} = 2 \times 2048 \times 4096 \times 2 \text{ byt
 
 $$\text{Total norm traffic (65 norms)} \approx 2 \text{ GB per forward pass}$$
 
-At 2 TB/s memory bandwidth, this is ~1 ms just for normalization -- before accounting for redundant writes when outputs are immediately read by the next kernel. Fusion eliminates much of this redundancy.
+At $2$ TB/s memory bandwidth, this is $\sim 1$ ms just for normalization -- before accounting for redundant writes when outputs are immediately read by the next kernel. Fusion eliminates much of this redundancy.
 
 ### From Naive to Optimized
 
@@ -908,7 +925,7 @@ Understanding our naive implementation is essential because it tells you exactly
 - **Pre-norm placement** (normalize before each sublayer) creates a gradient highway via the residual connection, enabling stable training of 100+ layer networks. Post-norm blocks this highway.
 - **BatchNorm fails for transformers** because it requires meaningful batch statistics, which do not exist at batch size 1 during autoregressive inference.
 - **Epsilon goes inside the square root** ($\sqrt{\sigma^2 + \epsilon}$, not $\sqrt{\sigma^2} + \epsilon$), and **variance must use the centered formula** ($\text{mean}((x-\mu)^2)$, not $\text{mean}(x^2) - \mu^2$) to avoid catastrophic cancellation.
-- **Normalization is memory-bandwidth-bound** at ~0.5 FLOPs/byte, far below the GPU compute ridge at ~156 FLOPs/byte. Kernel fusion is the primary optimization.
+- **Normalization is memory-bandwidth-bound** at $\sim 0.5$ FLOPs/byte, far below the GPU compute ridge at $\sim 156$ FLOPs/byte. Kernel fusion is the primary optimization.
 
 ### Quick Reference
 

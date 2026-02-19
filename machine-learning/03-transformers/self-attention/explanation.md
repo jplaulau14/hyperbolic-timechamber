@@ -73,33 +73,15 @@ Where $O$ is the attention output, $W_O \in \mathbb{R}^{d_v \times d_{\text{mode
 
 Here is the full pipeline with shapes annotated at every step:
 
-```
-Step 1: Compute raw scores
-    Q             K^T              S
-(B, n, d_k) @ (B, d_k, n)  =  (B, n, n)
+```mermaid
+flowchart TD
+    S1["<b>Step 1: Compute raw scores</b><br/>Q (B, n, d_k) @ K^T (B, d_k, n) = S (B, n, n)<br/><i>S[b,i,j] = Σ_k Q[b,i,k] · K[b,j,k]</i><br/>'How much should position i attend to position j?'"]
+    S2["<b>Step 2: Scale</b><br/>S = S / √d_k<br/>Shape unchanged: (B, n, n)"]
+    S3["<b>Step 3: Mask (optional)</b><br/>S = S + M, where M[i,j] = −∞ for masked positions<br/>Shape unchanged: (B, n, n)"]
+    S4["<b>Step 4: Softmax (row-wise)</b><br/>A = softmax(S, axis=−1)<br/>Shape: (B, n, n)<br/>Each row A[b,i,:] sums to 1"]
+    S5["<b>Step 5: Weighted sum of values</b><br/>A (B, n, n) @ V (B, n, d_v) = O (B, n, d_v)<br/><i>O[b,i,:] = Σ_j A[b,i,j] · V[b,j,:]</i><br/>'Output at position i is a weighted blend of all value vectors'"]
 
-    S[b,i,j] = sum over k of Q[b,i,k] * K[b,j,k]
-    "How much should position i attend to position j?"
-
-Step 2: Scale
-    S = S / sqrt(d_k)
-    Shape unchanged: (B, n, n)
-
-Step 3: Mask (optional)
-    S = S + M           where M[i,j] = -inf for masked positions
-    Shape unchanged: (B, n, n)
-
-Step 4: Softmax (row-wise)
-    A = softmax(S, axis=-1)
-    Shape: (B, n, n)
-    Each row A[b,i,:] sums to 1
-
-Step 5: Weighted sum of values
-    A          V             O
-(B, n, n) @ (B, n, d_v) = (B, n, d_v)
-
-    O[b,i,:] = sum over j of A[b,i,j] * V[b,j,:]
-    "Output at position i is a weighted blend of all value vectors"
+    S1 --> S2 --> S3 --> S4 --> S5
 ```
 
 ### Why Three Separate Projections?
@@ -182,13 +164,23 @@ After adding the mask: $e^{-\infty} = 0$, so softmax naturally redistributes pro
 
 For a 4-token sequence:
 
-```
-Mask M:                        Attention weights A:
-[ 0   -inf  -inf  -inf]       [1.00  0.00  0.00  0.00]
-[ 0    0    -inf  -inf]       [0.45  0.55  0.00  0.00]
-[ 0    0     0    -inf]       [0.20  0.35  0.45  0.00]
-[ 0    0     0     0  ]       [0.15  0.25  0.30  0.30]
-                                Each row sums to 1
+```mermaid
+block-beta
+  columns 2
+  block:mask["Mask M"]
+    columns 1
+    m1["[ 0, −∞, −∞, −∞ ]"]
+    m2["[ 0, 0, −∞, −∞ ]"]
+    m3["[ 0, 0, 0, −∞ ]"]
+    m4["[ 0, 0, 0, 0 ]"]
+  end
+  block:attn["Attention weights A (each row sums to 1)"]
+    columns 1
+    a1["[ 1.00, 0.00, 0.00, 0.00 ]"]
+    a2["[ 0.45, 0.55, 0.00, 0.00 ]"]
+    a3["[ 0.20, 0.35, 0.45, 0.00 ]"]
+    a4["[ 0.15, 0.25, 0.30, 0.30 ]"]
+  end
 ```
 
 Token 0 can only attend to itself (weight = 1.0). Token 1 splits attention between positions 0 and 1. Token 3 can attend to all four positions.
@@ -212,13 +204,30 @@ The attention weight matrix $A \in \mathbb{R}^{n \times n}$ is one of the most i
 
 ### Common Patterns
 
-```
-Diagonal (self-attending):      Vertical stripe:              Lower-triangular (causal):
-[0.8 0.1 0.1 0.0]              [0.1 0.7 0.1 0.1]            [1.0  0   0   0 ]
-[0.1 0.7 0.1 0.1]              [0.1 0.6 0.2 0.1]            [0.4 0.6  0   0 ]
-[0.1 0.1 0.8 0.0]              [0.1 0.7 0.1 0.1]            [0.2 0.3 0.5  0 ]
-[0.0 0.1 0.1 0.8]              [0.2 0.5 0.2 0.1]            [0.1 0.2 0.3 0.4]
-"Each token focuses on itself"  "Everyone looks at token 1"   "Autoregressive pattern"
+```mermaid
+block-beta
+  columns 3
+  block:diag["Diagonal (self-attending)<br/>'Each token focuses on itself'"]
+    columns 1
+    d1["[0.8, 0.1, 0.1, 0.0]"]
+    d2["[0.1, 0.7, 0.1, 0.1]"]
+    d3["[0.1, 0.1, 0.8, 0.0]"]
+    d4["[0.0, 0.1, 0.1, 0.8]"]
+  end
+  block:vert["Vertical stripe<br/>'Everyone looks at token 1'"]
+    columns 1
+    v1["[0.1, 0.7, 0.1, 0.1]"]
+    v2["[0.1, 0.6, 0.2, 0.1]"]
+    v3["[0.1, 0.7, 0.1, 0.1]"]
+    v4["[0.2, 0.5, 0.2, 0.1]"]
+  end
+  block:causal["Lower-triangular (causal)<br/>'Autoregressive pattern'"]
+    columns 1
+    c1["[1.0, 0, 0, 0]"]
+    c2["[0.4, 0.6, 0, 0]"]
+    c3["[0.2, 0.3, 0.5, 0]"]
+    c4["[0.1, 0.2, 0.3, 0.4]"]
+  end
 ```
 
 - **Diagonal-heavy**: the model is relying on local/positional information
@@ -639,12 +648,11 @@ This works because $\text{softmax}(x - c) = \text{softmax}(x)$ for any constant 
 
 The attention matrix $A \in \mathbb{R}^{n \times n}$ has $n^2$ elements because every query position computes a score against every key position. There is no way around this in the naive algorithm -- the softmax normalization requires knowing all scores in a row before any output can be computed.
 
-```
-Sequence length:  128     512    2048    4096     8192
-Attention matrix: 16K    262K    4.2M    16.8M   67.1M   elements per head
-Memory (FP32):    64 KB   1 MB   16 MB   64 MB   256 MB  per head
-With 32 heads:    2 MB   32 MB  512 MB   2 GB     8 GB
-```
+| Sequence length | 128 | 512 | 2048 | 4096 | 8192 |
+|---|---|---|---|---|---|
+| Attention matrix (elements/head) | 16K | 262K | 4.2M | 16.8M | 67.1M |
+| Memory FP32 (per head) | 64 KB | 1 MB | 16 MB | 64 MB | 256 MB |
+| With 32 heads | 2 MB | 32 MB | 512 MB | 2 GB | 8 GB |
 
 This quadratic scaling is why transformer context lengths were historically limited to 512 or 2048 tokens. Doubling the sequence length quadruples the memory and compute for the attention portion.
 
@@ -656,32 +664,43 @@ For $n = 4096$, $d_k = 64$:
 
 $$\text{Arithmetic intensity} = \frac{n(4d_k + 5)}{4(4d_k + n)} \approx \frac{4096 \times 261}{4 \times 4352} \approx 61 \text{ FLOPs/byte}$$
 
-An A100 GPU's ridge point is roughly 156 FLOPs/byte. Self-attention at this sequence length operates at 61 FLOPs/byte -- firmly in the **memory-bound** regime. Making attention faster requires reducing memory traffic, not reducing FLOPs.
+An A100 GPU's ridge point is roughly $156$ FLOPs/byte. Self-attention at this sequence length operates at $61$ FLOPs/byte -- firmly in the **memory-bound** regime. Making attention faster requires reducing memory traffic, not reducing FLOPs.
 
 ### The Memory Access Pattern Problem
 
 Here is the naive algorithm's memory access pattern:
 
-```
-HBM (slow, large)                  SRAM (fast, small)
-+-------------------+
-| Q (B, n, d_k)     |----read---->  Compute Q @ K^T
-| K (B, n, d_k)     |----read---->
-|                   |<---write----  S (B, n, n)  <-- FULL matrix written to HBM
-+-------------------+
-| S (B, n, n)       |----read---->  S / sqrt(d_k)
-|                   |<---write----  S_scaled     <-- read and write
-+-------------------+
-| S_scaled          |----read---->  S + mask
-|                   |<---write----  S_masked     <-- read and write
-+-------------------+
-| S_masked          |----read---->  softmax(S)
-|                   |<---write----  A (B, n, n)  <-- read and write
-+-------------------+
-| A (B, n, n)       |----read---->  A @ V
-| V (B, n, d_v)     |----read---->
-|                   |<---write----  O (B, n, d_v)
-+-------------------+
+```mermaid
+flowchart LR
+    subgraph HBM["HBM (slow, large)"]
+        QK["Q (B, n, d_k)<br/>K (B, n, d_k)"]
+        S["S (B, n, n)<br/>FULL matrix in HBM"]
+        Ssc["S_scaled (B, n, n)"]
+        Sm["S_masked (B, n, n)"]
+        Amat["A (B, n, n)"]
+        VH["V (B, n, d_v)"]
+        OH["O (B, n, d_v)"]
+    end
+
+    subgraph SRAM["SRAM (fast, small)"]
+        C1["Compute Q @ K^T"]
+        C2["S / √d_k"]
+        C3["S + mask"]
+        C4["softmax(S)"]
+        C5["A @ V"]
+    end
+
+    QK -- "read" --> C1
+    C1 -- "write" --> S
+    S -- "read" --> C2
+    C2 -- "write" --> Ssc
+    Ssc -- "read" --> C3
+    C3 -- "write" --> Sm
+    Sm -- "read" --> C4
+    C4 -- "write" --> Amat
+    Amat -- "read" --> C5
+    VH -- "read" --> C5
+    C5 -- "write" --> OH
 ```
 
 The attention matrix $(B, n, n)$ is read and written **four times** between HBM and SRAM. For $n = 4096$ with 32 heads in float32, that is $4 \times 2$ GB $= 8$ GB of memory traffic just for intermediate attention matrices.
@@ -717,7 +736,7 @@ Flash Attention does:
 | HBM reads/writes | $O(n^2)$ (multiple passes) | $O(n^2 d / M)$ where $M$ is SRAM size |
 | FLOPs | Same | Same (it is not a FLOPs optimization) |
 | Softmax | Standard (needs full row) | Online softmax (incremental, no full row needed) |
-| Speedup | Baseline | 2-4x wall-clock on A100 |
+| Speedup | Baseline | $2\text{-}4\times$ wall-clock on A100 |
 
 The critical prerequisite for understanding Flash Attention is understanding *exactly* why the naive version is slow -- and that means understanding the memory access pattern we implemented. Every read and write of the $(B, n, n)$ attention matrix in our implementation is a round-trip to slow HBM that Flash Attention eliminates.
 
@@ -773,20 +792,22 @@ Our implementation makes all of this explicit and measurable through `count_flop
 
 ### Quick Reference
 
-```
-Self-Attention (single head)
-├── Forward:  O(B * n^2 * d_k)  -- QK^T and AV dominate
-├── Backward: O(B * n^2 * d_k)  -- symmetric with forward
-├── Memory:   O(B * n^2)        -- attention matrix dominates
-│
-├── Parameters: W_Q, W_K, W_V (d_model, d_k), W_O (d_v, d_model)
-├── Cache:      X, Q, K, V, A, O  (A at B*n*n is the big one)
-│
-├── Key formula:  Attention(Q,K,V) = softmax(QK^T / sqrt(d_k)) V
-├── Scaling:      Normalizes dot-product variance from d_k to 1
-├── Causal mask:  -inf above diagonal, added before softmax
-│
-└── Optimized by: Flash Attention (tiled SRAM computation, O(n) memory)
-                  KV Cache (avoid recomputing K,V for past tokens)
-                  GQA/MQA (share K,V heads across query heads)
+```mermaid
+mindmap
+  root((Self-Attention<br/>single head))
+    Complexity
+      Forward: O(B·n²·d_k) -- QK^T and AV dominate
+      Backward: O(B·n²·d_k) -- symmetric with forward
+      Memory: O(B·n²) -- attention matrix dominates
+    Structures
+      Parameters: W_Q, W_K, W_V (d_model, d_k), W_O (d_v, d_model)
+      Cache: X, Q, K, V, A, O -- A at B·n·n is the big one
+    Key Concepts
+      Formula: Attention(Q,K,V) = softmax(QK^T / √d_k) V
+      Scaling: Normalizes dot-product variance from d_k to 1
+      Causal mask: −∞ above diagonal, added before softmax
+    Optimized By
+      Flash Attention -- tiled SRAM computation, O(n) memory
+      KV Cache -- avoid recomputing K,V for past tokens
+      GQA/MQA -- share K,V heads across query heads
 ```

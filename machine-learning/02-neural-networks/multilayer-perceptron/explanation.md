@@ -36,11 +36,19 @@ The critical point: if each interpreter were only allowed to do word-for-word su
 
 An MLP with $L$ layers has this structure:
 
-```
-Input          Hidden Layer 1       Hidden Layer 2       Output Layer
-a^(0) = x  --> z^(1) --> a^(1)  --> z^(2) --> a^(2)  --> z^(3) --> a^(3)
-(batch, 784)   linear   ReLU       linear   ReLU       linear   softmax
-               (batch, 256)        (batch, 128)        (batch, 10)
+```mermaid
+graph LR
+    A["Input<br>a⁽⁰⁾ = x<br>(batch, 784)"] -->|linear| Z1["z⁽¹⁾"]
+    Z1 -->|ReLU| A1["a⁽¹⁾<br>(batch, 256)"]
+    A1 -->|linear| Z2["z⁽²⁾"]
+    Z2 -->|ReLU| A2["a⁽²⁾<br>(batch, 128)"]
+    A2 -->|linear| Z3["z⁽³⁾"]
+    Z3 -->|softmax| A3["a⁽³⁾<br>(batch, 10)"]
+
+    style A fill:#e8f4fd,stroke:#333
+    style A1 fill:#d4edda,stroke:#333
+    style A2 fill:#d4edda,stroke:#333
+    style A3 fill:#fff3cd,stroke:#333
 ```
 
 **Notation:**
@@ -63,26 +71,24 @@ The first equation is a linear transformation (matrix multiply + bias). The seco
 
 ### Shape Walkthrough
 
-For a concrete example: input dimension 784 (e.g., flattened 28x28 image), two hidden layers of 256 and 128 neurons, and 10 output classes:
+For a concrete example: input dimension 784 (e.g., flattened $28 \times 28$ image), two hidden layers of 256 and 128 neurons, and 10 output classes:
 
-```
-a^(0)           W^(1)^T           z^(1)         a^(1)
-(batch, 784)  @ (784, 256)   =  (batch, 256)  --> ReLU --> (batch, 256)
-                   +
-               b^(1) broadcast
-              (256,)
-
-a^(1)           W^(2)^T           z^(2)         a^(2)
-(batch, 256)  @ (256, 128)   =  (batch, 128)  --> ReLU --> (batch, 128)
-                   +
-               b^(2) broadcast
-              (128,)
-
-a^(2)           W^(3)^T           z^(3)         a^(3)
-(batch, 128)  @ (128, 10)    =  (batch, 10)   --> softmax --> (batch, 10)
-                   +
-               b^(3) broadcast
-              (10,)
+```mermaid
+graph LR
+    subgraph Layer1["Layer 1"]
+        A0["a⁽⁰⁾<br>(batch, 784)"] -- "@ W⁽¹⁾ᵀ (784, 256)<br>+ b⁽¹⁾ (256,)" --> Z1["z⁽¹⁾<br>(batch, 256)"]
+        Z1 -- ReLU --> A1["a⁽¹⁾<br>(batch, 256)"]
+    end
+    subgraph Layer2["Layer 2"]
+        A1b["a⁽¹⁾<br>(batch, 256)"] -- "@ W⁽²⁾ᵀ (256, 128)<br>+ b⁽²⁾ (128,)" --> Z2["z⁽²⁾<br>(batch, 128)"]
+        Z2 -- ReLU --> A2["a⁽²⁾<br>(batch, 128)"]
+    end
+    subgraph Layer3["Layer 3"]
+        A2b["a⁽²⁾<br>(batch, 128)"] -- "@ W⁽³⁾ᵀ (128, 10)<br>+ b⁽³⁾ (10,)" --> Z3["z⁽³⁾<br>(batch, 10)"]
+        Z3 -- softmax --> A3["a⁽³⁾<br>(batch, 10)"]
+    end
+    A1 --> A1b
+    A2 --> A2b
 ```
 
 ### Critical: Cache Everything
@@ -134,17 +140,36 @@ The output of each layer becomes the input to the next. This is the "feedforward
 
 Think of the network as a directed acyclic graph (DAG). Each node is an operation (matmul, add, ReLU). Each edge carries a tensor. The forward pass flows left-to-right, computing values. The backward pass flows right-to-left, computing gradients.
 
+```mermaid
+graph LR
+    subgraph Forward["FORWARD (compute values, build graph)"]
+        direction LR
+        x["x"] --> L1["Linear₁<br>W⁽¹⁾, b⁽¹⁾"]
+        L1 --> z1["z⁽¹⁾"]
+        z1 --> R1["ReLU"]
+        R1 --> a1["a⁽¹⁾"]
+        a1 --> L2["Linear₂<br>W⁽²⁾, b⁽²⁾"]
+        L2 --> z2["z⁽²⁾"]
+        z2 --> SM["Softmax"]
+        SM --> a2["a⁽²⁾"]
+        a2 --> LOSS["Loss"]
+        y["y"] --> LOSS
+        LOSS --> LL["L"]
+    end
 ```
-FORWARD (compute values, build graph):
 
-  x ──> [Linear_1] ──> z^(1) ──> [ReLU] ──> a^(1) ──> [Linear_2] ──> z^(2) ──> [Softmax] ──> a^(2) ──> [Loss] ──> L
-         W^(1),b^(1)                                     W^(2),b^(2)                             y
-
-BACKWARD (traverse graph in reverse, multiply local gradients):
-
-  L ──> dL/da^(2) ──> delta^(2) ──> dL/dW^(2), dL/db^(2)
-                         |
-                    dL/da^(1) ──> [ReLU backward] ──> delta^(1) ──> dL/dW^(1), dL/db^(1)
+```mermaid
+graph RL
+    subgraph Backward["BACKWARD (traverse graph in reverse, multiply local gradients)"]
+        direction RL
+        L2["L"] --> dLda2["dL/da⁽²⁾"]
+        dLda2 --> delta2["delta⁽²⁾"]
+        delta2 --> grads2["dL/dW⁽²⁾, dL/db⁽²⁾"]
+        delta2 --> dLda1["dL/da⁽¹⁾"]
+        dLda1 --> RB["ReLU backward"]
+        RB --> delta1["delta⁽¹⁾"]
+        delta1 --> grads1["dL/dW⁽¹⁾, dL/db⁽¹⁾"]
+    end
 ```
 
 At each node during the backward pass, you answer two questions:
@@ -538,19 +563,16 @@ def fit(self, X, y, epochs, learning_rate, batch_size, verbose):
 
 During the forward pass, each layer stores its inputs and outputs. This creates an implicit computational graph -- a record of every operation performed and every intermediate value produced.
 
-```
-x = [1.0, 2.0]
-    |
-    v
-Layer 1: a_prev = x, z = x @ W1.T + b1, a = ReLU(z)
-    |               |
-    |          [cached: a_prev, z, a]
-    v
-Layer 2: a_prev = a1, z = a1 @ W2.T + b2, a = softmax(z)
-    |                  |
-    |             [cached: a_prev, z, a]
-    v
-Loss = cross_entropy(a2, Y)
+```mermaid
+graph TD
+    X["x = [1.0, 2.0]"] --> L1["Layer 1: a_prev = x, z = x @ W1.T + b1, a = ReLU(z)"]
+    L1 -.- C1["cached: a_prev, z, a"]
+    L1 --> L2["Layer 2: a_prev = a1, z = a1 @ W2.T + b2, a = softmax(z)"]
+    L2 -.- C2["cached: a_prev, z, a"]
+    L2 --> LOSS["Loss = cross_entropy(a2, Y)"]
+
+    style C1 fill:#fff3cd,stroke:#999,stroke-dasharray: 5 5
+    style C2 fill:#fff3cd,stroke:#999,stroke-dasharray: 5 5
 ```
 
 ### Backward Traverses It
@@ -798,19 +820,22 @@ loss = -np.sum(Y * np.log(P_clipped)) / n
 
 ### Quick Reference
 
-```
-Multilayer Perceptron
-|-- Forward (one layer): O(B * n_in * n_out) -- matrix multiply dominates
-|-- Backward (one layer): O(B * n_in * n_out) -- two matmuls at same cost
-|-- Training memory: O(params + B * sum(layer_sizes)) -- weights + cached activations
-|-- Inference memory: O(params + B * max(layer_sizes)) -- only current layer
+```mermaid
+graph TD
+    MLP["Multilayer Perceptron"]
+    MLP --> FWD["Forward (one layer): O(B * n_in * n_out)<br>matrix multiply dominates"]
+    MLP --> BWD["Backward (one layer): O(B * n_in * n_out)<br>two matmuls at same cost"]
+    MLP --> TMEM["Training memory: O(params + B * sum(layer_sizes))<br>weights + cached activations"]
+    MLP --> IMEM["Inference memory: O(params + B * max(layer_sizes))<br>only current layer"]
 
-Key equations:
-  Forward:  z = a_prev @ W.T + b;  a = f(z)
-  Delta:    delta_l = (delta_{l+1} @ W_{l+1}) * f'(z_l)
-  Grads:    dW = delta.T @ a_prev;  db = sum(delta)
-  Update:   W -= lr * dW;  b -= lr * db
+    MLP --> EQ["Key Equations"]
+    EQ --> E1["Forward: z = a_prev @ W.T + b; a = f(z)"]
+    EQ --> E2["Delta: delta_l = (delta_l+1 @ W_l+1) * f'(z_l)"]
+    EQ --> E3["Grads: dW = delta.T @ a_prev; db = sum(delta)"]
+    EQ --> E4["Update: W -= lr * dW; b -= lr * db"]
 
-Optimized by: kernel fusion (matmul + bias + activation in one pass),
-              quantization (INT8/INT4 weights), batching for GPU utilization
+    MLP --> OPT["Optimized by"]
+    OPT --> O1["Kernel fusion<br>(matmul + bias + activation in one pass)"]
+    OPT --> O2["Quantization<br>(INT8/INT4 weights)"]
+    OPT --> O3["Batching<br>for GPU utilization"]
 ```
